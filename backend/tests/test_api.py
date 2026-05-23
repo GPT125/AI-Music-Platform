@@ -2,7 +2,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from backend.app.auth import hash_password
+from backend.app.auth import COOKIE_NAME, create_token
 from backend.app.db import Base, SessionLocal, engine
 from backend.app.main import app
 from backend.app.models import User
@@ -34,13 +34,21 @@ def reset_db():
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     with SessionLocal() as db:
-        db.add(User(email="admin@example.com", password_hash=hash_password("secret"), is_admin=True))
+        db.add(User(email="admin@example.com", password_hash="", auth_provider="google", google_sub="test-google", name="Admin", is_admin=True))
         db.commit()
 
 
 def login(client: TestClient):
+    with SessionLocal() as db:
+        user = db.query(User).filter(User.email == "admin@example.com").one()
+        client.cookies.set(COOKIE_NAME, create_token(user))
+
+
+def test_password_login_is_disabled():
+    reset_db()
+    client = TestClient(app)
     response = client.post("/api/auth/login", json={"email": "admin@example.com", "password": "secret"})
-    assert response.status_code == 200
+    assert response.status_code == 410
 
 
 def test_private_routes_require_authentication():
@@ -88,3 +96,23 @@ def test_arrangement_requires_score_then_generates_tracks():
     assert len(payload["tracks"]) == 3
     assert payload["tracks"][0]["notes"]
 
+
+def test_tutorial_video_plan_uses_score_timeline_without_api_key():
+    reset_db()
+    client = TestClient(app)
+    login(client)
+    project = client.post("/api/projects", json={"name": "Video test"}).json()
+    empty_response = client.post(f"/api/projects/{project['id']}/tutorial-video", json={})
+    assert empty_response.status_code == 400
+    client.post(
+        f"/api/projects/{project['id']}/assets",
+        files={"file": ("exercise.musicxml", SAMPLE_MUSICXML.encode("utf-8"), "application/vnd.recordare.musicxml+xml")},
+    )
+    response = client.post(f"/api/projects/{project['id']}/tutorial-video", json={"fps": 30})
+    assert response.status_code == 200
+    plan = response.json()["render_plan"]
+    assert plan["renderer"] == "ffmpeg"
+    assert plan["requires_api_key"] is False
+    assert plan["event_count"] == 3
+    assert plan["cues"][1]["label"] == "E quarter-flat 4"
+    assert plan["ffmpeg_command"][0] == "ffmpeg"

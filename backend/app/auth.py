@@ -1,8 +1,13 @@
 from datetime import datetime, timedelta, timezone
+import secrets
 from typing import Optional
+from urllib.parse import urlencode
 
+import httpx
 import jwt
 from fastapi import Cookie, Depends, HTTPException, Response, status
+from google.auth.transport import requests as google_requests
+from google.oauth2 import id_token
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
@@ -13,6 +18,7 @@ from backend.app.models import User
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 COOKIE_NAME = "santoor_session"
+GOOGLE_STATE_COOKIE = "santoor_google_state"
 
 
 def hash_password(password: str) -> str:
@@ -36,11 +42,12 @@ def create_token(user: User) -> str:
 
 
 def set_auth_cookie(response: Response, user: User) -> None:
+    settings = get_settings()
     response.set_cookie(
         COOKIE_NAME,
         create_token(user),
         httponly=True,
-        secure=False,
+        secure=settings.secure_cookies,
         samesite="lax",
         max_age=60 * 60 * 24 * 7,
     )
@@ -48,6 +55,84 @@ def set_auth_cookie(response: Response, user: User) -> None:
 
 def clear_auth_cookie(response: Response) -> None:
     response.delete_cookie(COOKIE_NAME)
+
+
+def create_google_auth_url(state: str) -> str:
+    settings = get_settings()
+    if not settings.effective_google_client_id:
+        raise HTTPException(status_code=503, detail="Google auth is not configured")
+    query = urlencode(
+        {
+            "client_id": settings.effective_google_client_id,
+            "redirect_uri": settings.effective_google_redirect_uri,
+            "response_type": "code",
+            "scope": "openid email profile",
+            "state": state,
+            "prompt": "select_account",
+        }
+    )
+    return f"https://accounts.google.com/o/oauth2/v2/auth?{query}"
+
+
+def create_google_state() -> str:
+    return secrets.token_urlsafe(32)
+
+
+async def exchange_google_code(code: str) -> dict:
+    settings = get_settings()
+    if not settings.effective_google_client_id or not settings.effective_google_client_secret:
+        raise HTTPException(status_code=503, detail="Google auth is not configured")
+    async with httpx.AsyncClient(timeout=12) as client:
+        response = await client.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "code": code,
+                "client_id": settings.effective_google_client_id,
+                "client_secret": settings.effective_google_client_secret,
+                "redirect_uri": settings.effective_google_redirect_uri,
+                "grant_type": "authorization_code",
+            },
+        )
+    if response.status_code >= 400:
+        raise HTTPException(status_code=401, detail="Google sign-in failed")
+    token_payload = response.json()
+    token = token_payload.get("id_token")
+    if not token:
+        raise HTTPException(status_code=401, detail="Google did not return an identity token")
+    try:
+        return id_token.verify_oauth2_token(token, google_requests.Request(), settings.effective_google_client_id)
+    except ValueError:
+        raise HTTPException(status_code=401, detail="Google identity token could not be verified")
+
+
+def verify_google_credential(credential: str) -> dict:
+    settings = get_settings()
+    if not settings.effective_google_client_id:
+        raise HTTPException(status_code=503, detail="Google auth is not configured")
+    try:
+        return id_token.verify_oauth2_token(credential, google_requests.Request(), settings.effective_google_client_id)
+    except ValueError:
+        raise HTTPException(status_code=401, detail="Google identity token could not be verified")
+
+
+def upsert_google_user(db: Session, profile: dict) -> User:
+    email = str(profile.get("email", "")).lower()
+    google_sub = str(profile.get("sub", ""))
+    if not email or not google_sub:
+        raise HTTPException(status_code=401, detail="Google profile is missing email identity")
+    user = db.query(User).filter(User.google_sub == google_sub).first()
+    if not user:
+        user = db.query(User).filter(User.email == email).first()
+    if not user:
+        user = User(email=email, password_hash="", is_admin=False)
+        db.add(user)
+    user.auth_provider = "google"
+    user.google_sub = google_sub
+    user.name = str(profile.get("name", ""))[:255]
+    user.avatar_url = str(profile.get("picture", ""))
+    db.commit()
+    db.refresh(user)
+    return user
 
 
 def current_user(
@@ -81,4 +166,3 @@ def seed_initial_admin(db: Session) -> None:
         )
     )
     db.commit()
-

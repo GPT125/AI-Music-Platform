@@ -2,6 +2,9 @@ export type User = {
   id: string;
   email: string;
   is_admin: boolean;
+  name: string;
+  avatar_url: string;
+  auth_provider: string;
 };
 
 export type Project = {
@@ -60,3 +63,30 @@ export type ArrangementPayload = {
   tracks: ArrangementTrack[];
 };
 
+export type TutorialVideoPlan = {
+  status: string;
+  renderer: string;
+  requires_api_key: boolean;
+  api_key_policy: string;
+  fps: number;
+  resolution: { width: number; height: number };
+  duration_s: number;
+  frame_count: number;
+  event_count: number;
+  arrangement_id?: string | null;
+  pipeline: string[];
+  artifacts: Record<string, string>;
+  ffmpeg_command: string[];
+  cues: Array<{
+    event_id: string;
+    label: string;
+    start_frame: number;
+    end_frame: number;
+    onset_s: number;
+    duration_s: number;
+    bridge_id: string;
+    region: string;
+    octave_lane: number;
+    highlight: SantoorEvent["highlight"];
+  }>;
+};

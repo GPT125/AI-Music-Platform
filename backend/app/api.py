@@ -1,26 +1,39 @@
 from datetime import datetime
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
+from fastapi import APIRouter, Cookie, Depends, File, HTTPException, Query, Response, UploadFile, status
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
-from backend.app.auth import clear_auth_cookie, current_user, set_auth_cookie, verify_password
+from backend.app.auth import (
+    GOOGLE_STATE_COOKIE,
+    clear_auth_cookie,
+    create_google_auth_url,
+    create_google_state,
+    current_user,
+    exchange_google_code,
+    set_auth_cookie,
+    upsert_google_user,
+    verify_google_credential,
+)
 from backend.app.core.config import get_settings
 from backend.app.db import get_db
 from backend.app.models import Arrangement, Asset, Job, Project, Score, User
 from backend.app.schemas import (
     ArrangementRequest,
+    GoogleCredentialRequest,
     JobCreate,
-    LoginRequest,
     ProjectCreate,
     ProjectOut,
     ScoreUpdate,
+    TutorialVideoRequest,
     UserOut,
 )
 from backend.app.services.arrangement import generate_arrangement, instrument_catalog
 from backend.app.services.musicxml import parse_musicxml_events, read_score_payload
 from backend.app.services.santoor import build_santoor_events
+from backend.app.services.video import build_tutorial_video_plan
 
 
 router = APIRouter(prefix="/api")
@@ -49,18 +62,68 @@ def serialize_project(project: Project) -> ProjectOut:
 
 
 @router.post("/auth/login", response_model=UserOut)
-def login(payload: LoginRequest, response: Response, db: Session = Depends(get_db)) -> User:
-    user = db.query(User).filter(User.email == payload.email.lower()).first()
-    if not user or not verify_password(payload.password, user.password_hash):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
+def login() -> None:
+    raise HTTPException(status_code=status.HTTP_410_GONE, detail="Use Google sign-in")
+
+
+@router.get("/auth/google/start")
+def google_start() -> RedirectResponse:
+    state = create_google_state()
+    redirect = RedirectResponse(create_google_auth_url(state))
+    settings = get_settings()
+    redirect.set_cookie(
+        GOOGLE_STATE_COOKIE,
+        state,
+        httponly=True,
+        secure=settings.secure_cookies,
+        samesite="lax",
+        max_age=600,
+    )
+    return redirect
+
+
+@router.get("/auth/google/config")
+def google_config() -> dict:
+    settings = get_settings()
+    return {"client_id": settings.effective_google_client_id, "configured": bool(settings.effective_google_client_id)}
+
+
+@router.post("/auth/google/credential", response_model=UserOut)
+def google_credential(payload: GoogleCredentialRequest, response: Response, db: Session = Depends(get_db)) -> User:
+    profile = verify_google_credential(payload.credential)
+    user = upsert_google_user(db, profile)
     set_auth_cookie(response, user)
     return user
+
+
+@router.get("/auth/google/callback")
+async def google_callback(
+    response: Response,
+    code: str = Query(default=""),
+    state: str = Query(default=""),
+    stored_state: Optional[str] = Cookie(default=None, alias=GOOGLE_STATE_COOKIE),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    if not code or not state or not stored_state or not secrets_equal(state, stored_state):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Google sign-in state could not be verified")
+    profile = await exchange_google_code(code)
+    user = upsert_google_user(db, profile)
+    redirect = RedirectResponse("/")
+    set_auth_cookie(redirect, user)
+    redirect.delete_cookie(GOOGLE_STATE_COOKIE)
+    return redirect
 
 
 @router.post("/auth/logout")
 def logout(response: Response) -> dict:
     clear_auth_cookie(response)
     return {"ok": True}
+
+
+def secrets_equal(left: str, right: str) -> bool:
+    import secrets
+
+    return secrets.compare_digest(left, right)
 
 
 @router.get("/auth/me", response_model=UserOut)
@@ -233,6 +296,17 @@ def create_job(
             job.progress = 100
             job.message = "Generated default orchestra arrangement"
             job.result = {"arrangement_id": arrangement.id}
+    elif payload.type == "video":
+        if not project.score or not project.score.events:
+            job.status = "failed"
+            job.message = "No score events are available for tutorial video"
+            job.progress = 100
+        else:
+            plan = build_tutorial_video_plan(project.score.events)
+            job.status = "completed"
+            job.progress = 100
+            job.message = "Tutorial video render plan is ready"
+            job.result = plan
     else:
         job.status = "completed"
         job.progress = 100
@@ -330,3 +404,31 @@ def create_arrangement(
     db.commit()
     return {"id": arrangement.id, "name": arrangement.name, "tracks": arrangement.tracks}
 
+
+@router.post("/projects/{project_id}/tutorial-video")
+def create_tutorial_video(
+    project_id: str,
+    payload: TutorialVideoRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> dict:
+    project = project_for_user(db, project_id, user)
+    if not project.score or not project.score.events:
+        raise HTTPException(status_code=400, detail="Import a MusicXML score before creating a tutorial video")
+    if payload.arrangement_id:
+        arrangement = db.get(Arrangement, payload.arrangement_id)
+        if not arrangement or arrangement.project_id != project.id:
+            raise HTTPException(status_code=404, detail="Arrangement not found")
+    plan = build_tutorial_video_plan(project.score.events, payload.arrangement_id, payload.fps)
+    job = Job(
+        project_id=project.id,
+        type="video",
+        status="completed",
+        progress=100,
+        message="Tutorial video render plan is ready",
+        result=plan,
+    )
+    db.add(job)
+    project.updated_at = datetime.utcnow()
+    db.commit()
+    return {"job_id": job.id, "message": job.message, "render_plan": plan}

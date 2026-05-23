@@ -20,11 +20,16 @@ def upgrade() -> None:
         sa.Column("id", sa.String(length=36), nullable=False),
         sa.Column("email", sa.String(length=255), nullable=False),
         sa.Column("password_hash", sa.String(length=255), nullable=False),
+        sa.Column("auth_provider", sa.String(length=32), nullable=False),
+        sa.Column("google_sub", sa.String(length=255), nullable=False),
+        sa.Column("name", sa.String(length=255), nullable=False),
+        sa.Column("avatar_url", sa.Text(), nullable=False),
         sa.Column("is_admin", sa.Boolean(), nullable=False),
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(op.f("ix_users_email"), "users", ["email"], unique=True)
+    op.create_index(op.f("ix_users_google_sub"), "users", ["google_sub"], unique=False)
     op.create_table(
         "projects",
         sa.Column("id", sa.String(length=36), nullable=False),
@@ -97,5 +102,6 @@ def downgrade() -> None:
     op.drop_table("scores")
     op.drop_table("assets")
     op.drop_table("projects")
+    op.drop_index(op.f("ix_users_google_sub"), table_name="users")
     op.drop_index(op.f("ix_users_email"), table_name="users")
     op.drop_table("users")

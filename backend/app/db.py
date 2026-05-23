@@ -1,6 +1,6 @@
 from contextlib import contextmanager
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 from backend.app.core.config import get_settings
@@ -33,3 +33,19 @@ def session_scope():
     finally:
         db.close()
 
+
+def ensure_user_auth_columns() -> None:
+    inspector = inspect(engine)
+    if "users" not in inspector.get_table_names():
+        return
+    columns = {column["name"] for column in inspector.get_columns("users")}
+    additions = {
+        "auth_provider": "VARCHAR(32) NOT NULL DEFAULT 'local'",
+        "google_sub": "VARCHAR(255) NOT NULL DEFAULT ''",
+        "name": "VARCHAR(255) NOT NULL DEFAULT ''",
+        "avatar_url": "TEXT NOT NULL DEFAULT ''",
+    }
+    with engine.begin() as connection:
+        for column, definition in additions.items():
+            if column not in columns:
+                connection.execute(text(f"ALTER TABLE users ADD COLUMN {column} {definition}"))

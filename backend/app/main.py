@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from backend.app.api import router
 from backend.app.auth import seed_initial_admin
 from backend.app.core.config import get_settings
-from backend.app.db import Base, SessionLocal, engine
+from backend.app.db import Base, SessionLocal, engine, ensure_user_auth_columns
 from backend.app import models  # noqa: F401
 
 
@@ -26,6 +26,7 @@ app.add_middleware(
 @app.on_event("startup")
 def startup() -> None:
     Base.metadata.create_all(bind=engine)
+    ensure_user_auth_columns()
     with SessionLocal() as db:
         seed_initial_admin(db)
     Path(settings.storage_dir).mkdir(parents=True, exist_ok=True)

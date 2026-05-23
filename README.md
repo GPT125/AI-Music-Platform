@@ -2,6 +2,8 @@
 
 A free-first MusicXML learning platform for Persian Santoor, with a polished React interface, FastAPI backend, private beta login, Santoor-aware mapping, generated accompaniment, and a browser microphone score follower.
 
+The tutorial-video MVP follows the original research plan without a third-party video-generation service: MusicXML is corrected first, Santoor events drive the notation cursor and bridge/octave overlay, audio is derived from the same timeline, and FFmpeg muxes rendered frames plus WAV into MP4. No video API key is required for this deterministic path.
+
 ## Local Setup
 
 1. Create a Python environment and install backend dependencies:
@@ -43,4 +45,3 @@ npm run test --prefix frontend
 npm run build --prefix frontend
 docker build -t santoor-ai-learning-platform .
 ```
-

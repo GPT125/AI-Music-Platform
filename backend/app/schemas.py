@@ -8,10 +8,17 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=1)
 
 
+class GoogleCredentialRequest(BaseModel):
+    credential: str = Field(min_length=20)
+
+
 class UserOut(BaseModel):
     id: str
     email: EmailStr
     is_admin: bool
+    name: str = ""
+    avatar_url: str = ""
+    auth_provider: str = "google"
 
     model_config = {"from_attributes": True}
 
@@ -40,7 +47,7 @@ class ScoreUpdate(BaseModel):
 
 
 class JobCreate(BaseModel):
-    type: str = Field(pattern="^(normalize|map|arrange|omr)$")
+    type: str = Field(pattern="^(normalize|map|arrange|omr|video)$")
 
 
 class ArrangementRequest(BaseModel):
@@ -48,3 +55,7 @@ class ArrangementRequest(BaseModel):
     style: str = "balanced"
     name: str = "Live Orchestra"
 
+
+class TutorialVideoRequest(BaseModel):
+    arrangement_id: Optional[str] = None
+    fps: int = Field(default=30, ge=12, le=60)

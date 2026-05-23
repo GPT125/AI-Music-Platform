@@ -16,7 +16,11 @@ class User(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
-    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(255), default="", nullable=False)
+    auth_provider: Mapped[str] = mapped_column(String(32), default="local", nullable=False)
+    google_sub: Mapped[str] = mapped_column(String(255), default="", index=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(255), default="", nullable=False)
+    avatar_url: Mapped[str] = mapped_column(Text, default="", nullable=False)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
@@ -98,4 +102,3 @@ class Arrangement(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
     project = relationship("Project", back_populates="arrangements")
-

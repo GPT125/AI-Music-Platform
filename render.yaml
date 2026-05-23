@@ -16,7 +16,15 @@ services:
       - key: INITIAL_ADMIN_PASSWORD
         sync: false
       - key: CORS_ORIGINS
-        value: https://santoor-ai-learning-platform.onrender.com
+        value: https://ai-music-platform-qvjc.onrender.com
+      - key: APP_BASE_URL
+        value: https://ai-music-platform-qvjc.onrender.com
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        value: https://ai-music-platform-qvjc.onrender.com/api/auth/google/callback
       - key: UPLOAD_MAX_MB
         value: "25"
       - key: STORAGE_DIR
@@ -37,4 +45,3 @@ databases:
     databaseName: santoor_ai
     user: santoor_ai
     plan: free
-

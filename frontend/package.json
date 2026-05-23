@@ -6,18 +6,18 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "tsc -b && vite build",
-    "lint": "eslint .",
+    "lint": "eslint src e2e vite.config.ts playwright.config.ts eslint.config.js",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --pool=threads --minWorkers=1 --maxWorkers=1",
     "test:e2e": "playwright test"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^4.3.2",
     "lucide-react": "^0.468.0",
-    "tone": "^15.0.4",
-    "vite": "^5.4.8",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "tone": "^15.0.4",
+    "vite": "^5.4.8"
   },
   "devDependencies": {
     "@eslint/js": "^9.11.1",
@@ -31,9 +31,8 @@
     "eslint-plugin-react-refresh": "^0.4.12",
     "globals": "^15.9.0",
     "jsdom": "^25.0.1",
-    "typescript": "^5.6.2",
+    "typescript": "5.6.2",
     "typescript-eslint": "^8.7.0",
     "vitest": "^2.1.1"
   }
 }
-

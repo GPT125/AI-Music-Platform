@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { api } from "./api";
+import { detectPitch, midiToFrequency, updateFollower, type FollowerState } from "./audio/follower";
+import { OrchestraEngine } from "./audio/orchestra";
 import {
   Activity,
   AudioLines,
   FileMusic,
   Gauge,
-  KeyRound,
   Loader2,
   LogOut,
   Mic,
@@ -12,14 +14,14 @@ import {
   Pause,
   Play,
   Plus,
+  Projector,
+  ShieldCheck,
   SlidersHorizontal,
   UploadCloud,
   Wand2,
-} from "lucide-react";
-import { api } from "./api";
-import { detectPitch, midiToFrequency, updateFollower, type FollowerState } from "./audio/follower";
-import { OrchestraEngine } from "./audio/orchestra";
-import type { ArrangementPayload, Instrument, Project, ScorePayload, User } from "./types";
+} from "./icons";
+import Login from "./Login";
+import type { ArrangementPayload, Instrument, Project, ScorePayload, TutorialVideoPlan, User } from "./types";
 
 const initialFollower: FollowerState = {
   index: 0,
@@ -39,8 +41,10 @@ function App() {
   const [instruments, setInstruments] = useState<Instrument[]>([]);
   const [selectedInstruments, setSelectedInstruments] = useState<string[]>(["string_ensemble_1", "flute", "cello", "acoustic_grand_piano"]);
   const [arrangement, setArrangement] = useState<ArrangementPayload | null>(null);
+  const [videoPlan, setVideoPlan] = useState<TutorialVideoPlan | null>(null);
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  const [activeFollowerIndex, setActiveFollowerIndex] = useState(0);
 
   const selectedProject = projects.find((project) => project.id === selectedId) ?? null;
 
@@ -73,7 +77,7 @@ function App() {
     return <ShellLoader />;
   }
   if (!user) {
-    return <Login onLogin={setUser} />;
+    return <Login />;
   }
 
   return (
@@ -83,7 +87,7 @@ function App() {
           <div className="brand-mark"><Music2 size={22} /></div>
           <div>
             <strong>Santoor AI</strong>
-            <span>Private beta</span>
+            <span>{user.name || user.email}</span>
           </div>
         </div>
         <ProjectCreator
@@ -120,10 +124,11 @@ function App() {
       <main className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">MusicXML-first Santoor learning workspace</p>
+            <p className="eyebrow">Santoor now · all instruments architecture</p>
             <h1>{selectedProject?.name ?? "Create a project"}</h1>
           </div>
           <div className="status-pills">
+            <span><ShieldCheck size={15} /> Google account</span>
             <span><Activity size={15} /> {score?.status ?? "no score"}</span>
             <span><AudioLines size={15} /> {arrangement ? "orchestra ready" : "arrangement pending"}</span>
           </div>
@@ -142,7 +147,26 @@ function App() {
               }}
             />
             <ScorePanel score={score} projectId={selectedProject.id} onUpdated={setScore} />
-            <SantoorPanel score={score} activeIndex={0} />
+            <HeroConsole score={score} arrangement={arrangement} followerIndex={activeFollowerIndex} />
+            <SantoorPanel score={score} activeIndex={activeFollowerIndex} />
+            <TutorialVideoPanel
+              score={score}
+              arrangement={arrangement}
+              plan={videoPlan}
+              onCreate={async () => {
+                setBusy(true);
+                try {
+                  const result = await api.tutorialVideo(selectedProject.id, arrangement?.id);
+                  setVideoPlan(result.render_plan);
+                  setNotice(result.message);
+                } catch (error) {
+                  setNotice(error instanceof Error ? error.message : "Could not create tutorial video plan");
+                } finally {
+                  setBusy(false);
+                }
+              }}
+              busy={busy}
+            />
             <OrchestraPanel
               busy={busy}
               instruments={instruments}
@@ -160,13 +184,13 @@ function App() {
                 }
               }}
             />
-            <LiveOrchestraPanel score={score} arrangement={arrangement} />
+            <LiveOrchestraPanel score={score} arrangement={arrangement} onFollowerIndex={setActiveFollowerIndex} />
           </div>
         ) : (
           <div className="empty-state">
             <Music2 size={44} />
             <h2>No projects yet</h2>
-            <p>Create your first Santoor learning project to upload a MusicXML score and start the live orchestra workflow.</p>
+            <p>Create your first learning project to upload a MusicXML score and start the live orchestra workflow.</p>
           </div>
         )}
       </main>
@@ -179,46 +203,6 @@ function ShellLoader() {
     <div className="center-screen">
       <Loader2 className="spin" size={28} />
       <span>Loading workspace</span>
-    </div>
-  );
-}
-
-function Login({ onLogin }: { onLogin: (user: User) => void }) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-  return (
-    <div className="login-screen">
-      <section className="login-panel">
-        <div className="brand large">
-          <div className="brand-mark"><Music2 size={26} /></div>
-          <div>
-            <strong>Santoor AI</strong>
-            <span>Learning platform</span>
-          </div>
-        </div>
-        <h1>Private beta login</h1>
-        <form
-          onSubmit={async (event) => {
-            event.preventDefault();
-            setBusy(true);
-            setError("");
-            try {
-              onLogin(await api.login(email, password));
-            } catch (loginError) {
-              setError(loginError instanceof Error ? loginError.message : "Login failed");
-            } finally {
-              setBusy(false);
-            }
-          }}
-        >
-          <label>Email<input value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" /></label>
-          <label>Password<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" /></label>
-          {error && <p className="form-error">{error}</p>}
-          <button className="primary" disabled={busy}><KeyRound size={18} /> {busy ? "Signing in" : "Sign in"}</button>
-        </form>
-      </section>
     </div>
   );
 }
@@ -305,6 +289,43 @@ function ScorePanel({ score, projectId, onUpdated }: { score: ScorePayload | nul
   );
 }
 
+function HeroConsole({
+  score,
+  arrangement,
+  followerIndex,
+}: {
+  score: ScorePayload | null;
+  arrangement: ArrangementPayload | null;
+  followerIndex: number;
+}) {
+  const events = score?.events ?? [];
+  const current = events[followerIndex];
+  const duration = events.length
+    ? Math.max(...events.map((event) => event.onset_s + event.duration_s))
+    : 0;
+  const progress = events.length ? Math.round((followerIndex / Math.max(events.length - 1, 1)) * 100) : 0;
+  return (
+    <section className="hero-console">
+      <div className="wave-stack" aria-hidden="true">
+        {Array.from({ length: 18 }).map((_, index) => (
+          <span key={index} style={{ height: `${22 + ((index * 19) % 58)}px` }} />
+        ))}
+      </div>
+      <div className="hero-copy">
+        <p className="eyebrow">Real-time score follower</p>
+        <h2>{current ? `Following ${current.ui_label}` : "Upload a score to unlock live following"}</h2>
+        <p>Santoor is the active teaching model; the project data model, score timeline, and orchestra engine are built so additional instruments can be added cleanly.</p>
+      </div>
+      <div className="hero-metrics">
+        <div><strong>{events.length}</strong><span>mapped notes</span></div>
+        <div><strong>{arrangement?.tracks.length ?? 0}</strong><span>orchestra tracks</span></div>
+        <div><strong>{duration ? `${duration.toFixed(1)}s` : "-"}</strong><span>score time</span></div>
+      </div>
+      <div className="timeline-rail"><span style={{ width: `${progress}%` }} /></div>
+    </section>
+  );
+}
+
 function SantoorPanel({ score, activeIndex }: { score: ScorePayload | null; activeIndex: number }) {
   const events = score?.events ?? [];
   const active = events[activeIndex];
@@ -334,6 +355,66 @@ function SantoorPanel({ score, activeIndex }: { score: ScorePayload | null; acti
           </div>
         ))}
       </div>
+    </section>
+  );
+}
+
+function TutorialVideoPanel({
+  score,
+  arrangement,
+  plan,
+  onCreate,
+  busy,
+}: {
+  score: ScorePayload | null;
+  arrangement: ArrangementPayload | null;
+  plan: TutorialVideoPlan | null;
+  onCreate: () => Promise<void>;
+  busy: boolean;
+}) {
+  const cues = plan?.cues.slice(0, 6) ?? score?.events.slice(0, 6).map((event) => ({
+    event_id: event.id,
+    label: event.ui_label,
+    start_frame: Math.round(event.onset_s * 30),
+    end_frame: Math.round((event.onset_s + event.duration_s) * 30),
+    onset_s: event.onset_s,
+    duration_s: event.duration_s,
+    bridge_id: event.bridge_id,
+    region: event.region,
+    octave_lane: event.octave_lane,
+    highlight: event.highlight,
+  })) ?? [];
+  return (
+    <section className="panel video-panel">
+      <div className="panel-title"><Projector size={18} /><h2>Tutorial Video</h2></div>
+      <div className="video-stage">
+        <div className="video-score">
+          {cues.map((cue) => (
+            <span key={cue.event_id}>{cue.label}</span>
+          ))}
+        </div>
+        <div className="video-santoor">
+          {cues.slice(0, 4).map((cue) => (
+            <i
+              key={`${cue.event_id}-dot`}
+              className={`lane-${cue.octave_lane}`}
+              style={{ left: `${10 + Number(cue.bridge_id.slice(1) || 1) * 8.8}%`, top: `${32 + cue.octave_lane * 20}%` }}
+            />
+          ))}
+        </div>
+      </div>
+      <div className="video-meta">
+        <span><strong>{plan?.renderer ?? "ffmpeg"}</strong> renderer</span>
+        <span><strong>{plan?.requires_api_key ? "Yes" : "No"}</strong> API key</span>
+        <span><strong>{plan ? `${plan.duration_s.toFixed(1)}s` : `${score?.events.length ?? 0} notes`}</strong> timeline</span>
+      </div>
+      <button className="primary" onClick={onCreate} disabled={busy || !score?.events.length}>
+        <Projector size={17} /> {busy ? "Preparing" : "Prepare video plan"}
+      </button>
+      <p className="small-note">
+        {plan?.api_key_policy ?? "The MVP uses generated frames plus audio muxed by FFmpeg, so no external AI video key is required."}
+      </p>
+      {arrangement && <p className="success">Video plan can use the current {arrangement.tracks.length}-track arrangement as its audio source.</p>}
     </section>
   );
 }
@@ -383,7 +464,15 @@ function OrchestraPanel({
   );
 }
 
-function LiveOrchestraPanel({ score, arrangement }: { score: ScorePayload | null; arrangement: ArrangementPayload | null }) {
+function LiveOrchestraPanel({
+  score,
+  arrangement,
+  onFollowerIndex,
+}: {
+  score: ScorePayload | null;
+  arrangement: ArrangementPayload | null;
+  onFollowerIndex: (index: number) => void;
+}) {
   const [follower, setFollower] = useState<FollowerState>(initialFollower);
   const [micState, setMicState] = useState("Not connected");
   const [playing, setPlaying] = useState(false);
@@ -411,7 +500,8 @@ function LiveOrchestraPanel({ score, arrangement }: { score: ScorePayload | null
           lastTickRef.current = now;
           engineRef.current?.setTempoRatio(next.tempoRatio);
           if (next.isPaused) engineRef.current?.pause();
-          else if (playing) engineRef.current?.playFrom(events[next.index]?.onset_s ?? 0);
+          else if (playing && previous.isPaused) engineRef.current?.playFrom(events[next.index]?.onset_s ?? 0);
+          onFollowerIndex(next.index);
           return next;
         });
       }
@@ -419,7 +509,7 @@ function LiveOrchestraPanel({ score, arrangement }: { score: ScorePayload | null
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [events, playing]);
+  }, [events, onFollowerIndex, playing]);
 
   async function connectMicrophone() {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false }, video: false });
@@ -440,6 +530,7 @@ function LiveOrchestraPanel({ score, arrangement }: { score: ScorePayload | null
     await engine.start();
     engine.schedule(arrangement.tracks);
     engine.playFrom(currentEvent?.onset_s ?? 0);
+    setFollower((previous) => ({ ...previous, isPaused: false }));
     setPlaying(true);
   }
 

@@ -1,4 +1,4 @@
-import type { ArrangementPayload, Instrument, Project, ScorePayload, User } from "./types";
+import type { ArrangementPayload, Instrument, Project, ScorePayload, TutorialVideoPlan, User } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
@@ -26,8 +26,10 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 export const api = {
   me: () => request<User>("/api/auth/me"),
-  login: (email: string, password: string) =>
-    request<User>("/api/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
+  googleStartUrl: () => `${API_BASE}/api/auth/google/start`,
+  googleConfig: () => request<{ client_id: string; configured: boolean }>("/api/auth/google/config"),
+  googleCredential: (credential: string) =>
+    request<User>("/api/auth/google/credential", { method: "POST", body: JSON.stringify({ credential }) }),
   logout: () => request<{ ok: boolean }>("/api/auth/logout", { method: "POST" }),
   projects: () => request<Project[]>("/api/projects"),
   createProject: (name: string) =>
@@ -52,5 +54,9 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ instruments, style: "balanced", name: "Live Orchestra" }),
     }),
+  tutorialVideo: (projectId: string, arrangementId?: string) =>
+    request<{ job_id: string; message: string; render_plan: TutorialVideoPlan }>(`/api/projects/${projectId}/tutorial-video`, {
+      method: "POST",
+      body: JSON.stringify({ arrangement_id: arrangementId ?? null, fps: 30 }),
+    }),
 };
-
