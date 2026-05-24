@@ -2,6 +2,7 @@ import type { ArrangementTrack } from "../types";
 
 const NOTES = ["C3", "D#3", "F#3", "A3", "C4", "D#4", "F#4", "A4", "C5", "D#5", "F#5", "A5", "C6"];
 const SOUNDFONT_BASE_URL = import.meta.env.VITE_SOUNDFONT_BASE_URL || "https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/";
+const SANTOOR_SAMPLE_BASE_URL = import.meta.env.VITE_SANTOOR_SAMPLE_BASE_URL || "";
 let toneRuntime: any = null;
 
 export function midiToNote(midi: number): string {
@@ -72,9 +73,10 @@ export class OrchestraEngine {
     if (!Tone) throw new Error("Audio engine is not ready");
     if (!this.players.has(id)) {
       try {
+        const isSantoor = id === "dulcimer" && SANTOOR_SAMPLE_BASE_URL;
         const sampler = new Tone.Sampler({
           urls: Object.fromEntries(NOTES.map((note) => [note, `${note}.mp3`])),
-          baseUrl: `${SOUNDFONT_BASE_URL.replace(/\/$/, "")}/${id}-mp3/`,
+          baseUrl: isSantoor ? `${SANTOOR_SAMPLE_BASE_URL.replace(/\/$/, "")}/` : `${SOUNDFONT_BASE_URL.replace(/\/$/, "")}/${id}-mp3/`,
           release: 1,
         }).toDestination();
         this.players.set(id, sampler);

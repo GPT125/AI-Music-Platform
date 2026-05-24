@@ -32,7 +32,8 @@ from backend.app.schemas import (
 )
 from backend.app.services.arrangement import generate_arrangement, instrument_catalog
 from backend.app.services.musicxml import parse_musicxml_events, read_score_payload
-from backend.app.services.santoor import build_santoor_events
+from backend.app.services.omr import OmrNotConfigured, try_run_omr
+from backend.app.services.santoor import build_santoor_events, tuning_summary
 from backend.app.services.video import build_tutorial_video_plan
 
 
@@ -136,6 +137,11 @@ def instruments() -> dict:
     return {"instruments": instrument_catalog()}
 
 
+@router.get("/santoor/tuning")
+def santoor_tuning(preset: str = Query(default="persian_santoor_standard")) -> dict:
+    return tuning_summary(preset)
+
+
 @router.post("/projects", response_model=ProjectOut)
 def create_project(payload: ProjectCreate, db: Session = Depends(get_db), user: User = Depends(current_user)) -> ProjectOut:
     project = Project(
@@ -233,25 +239,77 @@ async def upload_asset(
         job.message = "MIDI stored. Import MusicXML for notation-accurate Santoor mapping."
         job.result = {"score_status": "needs_musicxml"}
     else:
-        asset.status = "needs_omr"
-        status_message = "Image/PDF stored. Configure Audiveris, homr, or oemer to enable automatic OMR."
-        if any([settings.omr_audiveris_path, settings.omr_homr_path, settings.omr_oemer_path]):
-            status_message = "Image/PDF stored. OMR is configured but asynchronous OMR is not enabled in this free-first service."
-        job.status = "completed"
-        job.progress = 100
-        job.message = status_message
-        job.result = {"score_status": "needs_omr"}
-        if not project.score:
-            db.add(
-                Score(
-                    project_id=project.id,
-                    source_format=suffix.lstrip("."),
-                    status="needs_omr",
-                    musicxml="",
-                    events=[],
-                    meta={"message": status_message},
+        try:
+            omr_result = try_run_omr(str(storage_path), settings.omr_audiveris_path)
+            events = parse_musicxml_events(omr_result["musicxml"])
+            santoor_events = build_santoor_events(events, project.tuning_preset)
+            if project.score:
+                score = project.score
+                score.musicxml = omr_result["musicxml"]
+                score.events = santoor_events
+                score.source_format = omr_result["source_format"]
+                score.status = "needs_correction"
+                score.meta = {
+                    "event_count": len(events),
+                    "message": "Audiveris OMR completed. Review the recognized score before performance use.",
+                    "omr_export_path": omr_result["export_path"],
+                }
+                score.updated_at = datetime.utcnow()
+            else:
+                db.add(
+                    Score(
+                        project_id=project.id,
+                        source_format=omr_result["source_format"],
+                        status="needs_correction",
+                        musicxml=omr_result["musicxml"],
+                        events=santoor_events,
+                        meta={
+                            "event_count": len(events),
+                            "message": "Audiveris OMR completed. Review the recognized score before performance use.",
+                            "omr_export_path": omr_result["export_path"],
+                        },
+                    )
                 )
-            )
+            asset.status = "processed"
+            job.status = "completed"
+            job.progress = 100
+            job.message = f"OMR recognized {len(events)} notes. Review/correct before performance."
+            job.result = {"score_status": "needs_correction", "event_count": len(events)}
+        except OmrNotConfigured as exc:
+            asset.status = "needs_omr"
+            status_message = str(exc)
+            job.status = "completed"
+            job.progress = 100
+            job.message = status_message
+            job.result = {"score_status": "needs_omr"}
+            if not project.score:
+                db.add(
+                    Score(
+                        project_id=project.id,
+                        source_format=suffix.lstrip("."),
+                        status="needs_omr",
+                        musicxml="",
+                        events=[],
+                        meta={"message": status_message, "recommended_omr": "Audiveris batch export to MusicXML"},
+                    )
+                )
+        except Exception as exc:
+            asset.status = "omr_failed"
+            job.status = "failed"
+            job.progress = 100
+            job.message = f"OMR failed: {exc}"
+            job.result = {"score_status": "omr_failed", "error": str(exc)}
+            if not project.score:
+                db.add(
+                    Score(
+                        project_id=project.id,
+                        source_format=suffix.lstrip("."),
+                        status="omr_failed",
+                        musicxml="",
+                        events=[],
+                        meta={"message": job.message},
+                    )
+                )
     project.updated_at = datetime.utcnow()
     job.updated_at = datetime.utcnow()
     db.commit()

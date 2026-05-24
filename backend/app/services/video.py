@@ -3,6 +3,28 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 
+CAMERA_VIEWS = [
+    {
+        "id": "overhead",
+        "label": "High hand view",
+        "description": "Top-down performer view showing both mallets, all bridges, and exact strike timing.",
+        "camera": {"x": 0.5, "y": 0.08, "zoom": 1.0, "rotation": 0},
+    },
+    {
+        "id": "right_side",
+        "label": "Right side view",
+        "description": "Treble-side angle focused on white strings, right-hand lead strikes, and rebound.",
+        "camera": {"x": 0.82, "y": 0.36, "zoom": 1.18, "rotation": -11},
+    },
+    {
+        "id": "left_side",
+        "label": "Left side view",
+        "description": "Bass-side angle focused on yellow strings, left-hand answers, and low-register resonance.",
+        "camera": {"x": 0.18, "y": 0.38, "zoom": 1.18, "rotation": 11},
+    },
+]
+
+
 def build_tutorial_video_plan(
     score_events: List[Dict[str, Any]],
     arrangement_id: Optional[str] = None,
@@ -26,8 +48,13 @@ def build_tutorial_video_plan(
                 "duration_s": round(duration_s, 4),
                 "bridge_id": event.get("bridge_id", ""),
                 "region": event.get("region", ""),
+                "string_material": event.get("string_material", ""),
+                "course": event.get("course", 0),
                 "octave_lane": int(event.get("octave_lane", 0)),
                 "highlight": event.get("highlight", {}),
+                "mallet": event.get("technique", {}).get("mallet", "right"),
+                "resonance_s": event.get("technique", {}).get("resonance_s", 2.0),
+                "playable_label": event.get("playable_label", event.get("ui_label")),
             }
         )
 
@@ -42,12 +69,22 @@ def build_tutorial_video_plan(
         "frame_count": round(duration * fps),
         "event_count": len(score_events),
         "arrangement_id": arrangement_id,
+        "views": CAMERA_VIEWS,
+        "performance_model": {
+            "instrument": "Persian Santoor",
+            "strings": 72,
+            "courses": 18,
+            "bridges": 18,
+            "mallets": 2,
+            "strike_rendering": "Each cue contains bridge, lane, mallet hand, start frame, end frame, and resonance tail for deterministic animation.",
+        },
         "pipeline": [
-            "MusicXML correction is the source of truth",
-            "SantoorEvent JSON drives bridge, lane, octave, and beat highlights",
+            "Printed PDF/image is recognized by configured Audiveris OMR, or MusicXML is imported directly",
+            "Correction MusicXML is the source of truth",
+            "SantoorEvent JSON drives bridge, lane, octave, mallet hand, and beat highlights",
+            "Three deterministic camera views render from the same cue timeline",
             "MIDI/audio is derived from the same event timeline",
-            "Frame renderer draws notation cursor and Santoor overlay",
-            "FFmpeg muxes rendered frames plus WAV into the final MP4",
+            "FFmpeg can mux rendered frames plus WAV into the final MP4 when a worker/native runtime is available",
         ],
         "artifacts": {
             "musicxml": "score.musicxml",

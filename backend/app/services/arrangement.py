@@ -65,12 +65,17 @@ def generate_arrangement(score_events: List[Dict[str, Any]], instrument_ids: Lis
             else:
                 note = midi + (12 if track_index % 3 == 0 else 0)
                 note_duration = max(duration * 0.9, 0.25)
+            humanized_onset = onset + ((event_index % 3) - 1) * 0.012
+            if instrument["id"] == "dulcimer":
+                note = int(event.get("playable_midi_note", midi))
+                note_duration = max(duration * 1.15, 0.35)
             notes.append(
                 {
                     "midi_note": max(24, min(96, note)),
-                    "onset_s": round(onset, 4),
+                    "onset_s": round(max(0, humanized_onset), 4),
                     "duration_s": round(note_duration, 4),
                     "velocity": 58 if instrument["family"] in {"strings", "voice", "synth"} else 72,
+                    "follow_event_id": event.get("id"),
                 }
             )
         tracks.append(
@@ -79,8 +84,8 @@ def generate_arrangement(score_events: List[Dict[str, Any]], instrument_ids: Lis
                 "style": style,
                 "notes": notes,
                 "enabled": True,
-                "volume": 0.72,
+                "volume": 0.68 if instrument["family"] in {"brass", "percussion"} else 0.74,
+                "sample_policy": "General MIDI SoundFont by default; set SANTOOR_SAMPLE_BASE_URL/VITE_SANTOOR_SAMPLE_BASE_URL for a recorded santur sample pack.",
             }
         )
     return tracks
-

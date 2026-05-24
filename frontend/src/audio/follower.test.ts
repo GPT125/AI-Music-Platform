@@ -30,8 +30,14 @@ const events: SantoorEvent[] = [
     velocity: 82,
     bridge_id: "B01",
     region: "right",
+    string_material: "steel",
+    course: 10,
+    strings: 4,
     octave_lane: 1,
     mapping_error_cents: 0,
+    playable_midi_note: 69,
+    playable_accidental_cents: 0,
+    playable_label: "A4",
     ui_label: "A4",
     highlight: { x: 0, y: 0, lane: 1, order: 0 },
   },
@@ -45,8 +51,14 @@ const events: SantoorEvent[] = [
     velocity: 82,
     bridge_id: "B02",
     region: "right",
+    string_material: "steel",
+    course: 11,
+    strings: 4,
     octave_lane: 1,
     mapping_error_cents: 0,
+    playable_midi_note: 71,
+    playable_accidental_cents: 0,
+    playable_label: "B4",
     ui_label: "B4",
     highlight: { x: 0, y: 0, lane: 1, order: 1 },
   },
@@ -73,4 +85,3 @@ describe("score follower", () => {
     expect(next.confidence).toBeLessThan(0.6);
   });
 });
-

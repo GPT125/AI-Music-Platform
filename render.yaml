@@ -31,6 +31,12 @@ services:
         value: /app/backend/storage
       - key: SOUNDFONT_BASE_URL
         value: https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/
+      - key: SANTOOR_SAMPLE_BASE_URL
+        sync: false
+      - key: VITE_SOUNDFONT_BASE_URL
+        value: https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/
+      - key: VITE_SANTOOR_SAMPLE_BASE_URL
+        sync: false
       - key: OMR_AUDIVERIS_PATH
         sync: false
       - key: OMR_HOMR_PATH

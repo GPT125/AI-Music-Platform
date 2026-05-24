@@ -372,6 +372,9 @@ function TutorialVideoPanel({
   onCreate: () => Promise<void>;
   busy: boolean;
 }) {
+  const [view, setView] = useState<"overhead" | "right_side" | "left_side">("overhead");
+  const [isPreviewing, setIsPreviewing] = useState(false);
+  const [previewTime, setPreviewTime] = useState(0);
   const cues = plan?.cues.slice(0, 6) ?? score?.events.slice(0, 6).map((event) => ({
     event_id: event.id,
     label: event.ui_label,
@@ -383,14 +386,79 @@ function TutorialVideoPanel({
     region: event.region,
     octave_lane: event.octave_lane,
     highlight: event.highlight,
+    string_material: event.string_material,
+    course: event.course,
+    mallet: event.technique?.mallet ?? "right",
+    resonance_s: event.technique?.resonance_s ?? 2,
+    playable_label: event.playable_label,
   })) ?? [];
+  const fullCues = plan?.cues ?? cues;
+  const activeCue = fullCues.find((cue) => previewTime >= cue.onset_s && previewTime <= cue.onset_s + Math.max(cue.duration_s, 0.16)) ?? fullCues[0];
+  const duration = plan?.duration_s || Math.max(...fullCues.map((cue) => cue.onset_s + cue.duration_s), 1);
+  const viewSpec = plan?.views.find((item) => item.id === view);
+
+  useEffect(() => {
+    if (!isPreviewing) return;
+    let frame = 0;
+    let last = performance.now();
+    const tick = (now: number) => {
+      const delta = (now - last) / 1000;
+      last = now;
+      setPreviewTime((time) => {
+        const next = time + delta;
+        if (next >= duration) {
+          setIsPreviewing(false);
+          return 0;
+        }
+        return next;
+      });
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [duration, isPreviewing]);
+
   return (
     <section className="panel video-panel">
       <div className="panel-title"><Projector size={18} /><h2>Tutorial Video</h2></div>
+      <div className="view-tabs" role="tablist" aria-label="Santoor video camera view">
+        {(["overhead", "right_side", "left_side"] as const).map((item) => (
+          <button key={item} className={view === item ? "active" : ""} onClick={() => setView(item)}>
+            {item === "overhead" ? "High" : item === "right_side" ? "Right" : "Left"}
+          </button>
+        ))}
+      </div>
       <div className="video-stage">
+        <div className={`performer-view ${view}`}>
+          <div className="camera-label">
+            <strong>{viewSpec?.label ?? "High hand view"}</strong>
+            <span>{activeCue?.label ?? "No cue"}</span>
+          </div>
+          <div className="santoor-body" style={{ transform: `scale(${viewSpec?.camera.zoom ?? 1}) rotate(${viewSpec?.camera.rotation ?? 0}deg)` }}>
+            {Array.from({ length: 18 }).map((_, index) => (
+              <span key={index} className="string-course" style={{ left: `${5 + index * 5.25}%` }} />
+            ))}
+            {activeCue && (
+              <>
+                <b
+                  className={`mallet right ${activeCue.mallet === "right" ? "strike" : ""}`}
+                  style={{ left: `${12 + Number(activeCue.bridge_id.slice(1) || 1) * 8.5}%`, top: `${28 + activeCue.octave_lane * 14}%` }}
+                />
+                <b
+                  className={`mallet left ${activeCue.mallet === "left" ? "strike" : ""}`}
+                  style={{ left: `${10 + Number(activeCue.bridge_id.slice(1) || 1) * 8.5}%`, top: `${36 + activeCue.octave_lane * 14}%` }}
+                />
+                <i
+                  className="strike-glow"
+                  style={{ left: `${11 + Number(activeCue.bridge_id.slice(1) || 1) * 8.5}%`, top: `${36 + activeCue.octave_lane * 15}%` }}
+                />
+              </>
+            )}
+          </div>
+        </div>
         <div className="video-score">
           {cues.map((cue) => (
-            <span key={cue.event_id}>{cue.label}</span>
+            <span key={cue.event_id} className={activeCue?.event_id === cue.event_id ? "active" : ""}>{cue.label}</span>
           ))}
         </div>
         <div className="video-santoor">
@@ -408,8 +476,21 @@ function TutorialVideoPanel({
         <span><strong>{plan?.requires_api_key ? "Yes" : "No"}</strong> API key</span>
         <span><strong>{plan ? `${plan.duration_s.toFixed(1)}s` : `${score?.events.length ?? 0} notes`}</strong> timeline</span>
       </div>
+      <div className="transport compact">
+        <button onClick={() => setIsPreviewing((value) => !value)} disabled={!fullCues.length}>
+          {isPreviewing ? <Pause size={17} /> : <Play size={17} />} {isPreviewing ? "Pause preview" : "Preview timing"}
+        </button>
+        <input
+          type="range"
+          min="0"
+          max={duration}
+          step="0.01"
+          value={previewTime}
+          onChange={(event) => setPreviewTime(Number(event.target.value))}
+        />
+      </div>
       <button className="primary" onClick={onCreate} disabled={busy || !score?.events.length}>
-        <Projector size={17} /> {busy ? "Preparing" : "Prepare video plan"}
+        <Projector size={17} /> {busy ? "Preparing" : "Create 3-view video timeline"}
       </button>
       <p className="small-note">
         {plan?.api_key_policy ?? "The MVP uses generated frames plus audio muxed by FFmpeg, so no external AI video key is required."}

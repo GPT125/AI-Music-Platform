@@ -28,10 +28,17 @@ export type SantoorEvent = {
   velocity: number;
   bridge_id: string;
   region: string;
+  string_material: string;
+  course: number;
+  strings: number;
   octave_lane: number;
   mapping_error_cents: number;
+  playable_midi_note: number;
+  playable_accidental_cents: number;
+  playable_label: string;
   ui_label: string;
-  highlight: { x: number; y: number; lane: number; order: number };
+  highlight: { x: number; y: number; lane: number; order: number; hand?: string; strike_angle?: number };
+  technique?: { mallet: string; stroke: string; damping: string; resonance_s: number };
 };
 
 export type ScorePayload = {
@@ -49,12 +56,15 @@ export type Instrument = {
   program: number;
 };
 
+export type ArrangementNote = { midi_note: number; onset_s: number; duration_s: number; velocity: number; follow_event_id?: string };
+
 export type ArrangementTrack = {
   instrument: Instrument;
   style: string;
-  notes: Array<{ midi_note: number; onset_s: number; duration_s: number; velocity: number }>;
+  notes: ArrangementNote[];
   enabled: boolean;
   volume: number;
+  sample_policy?: string;
 };
 
 export type ArrangementPayload = {
@@ -74,6 +84,13 @@ export type TutorialVideoPlan = {
   frame_count: number;
   event_count: number;
   arrangement_id?: string | null;
+  views: Array<{
+    id: "overhead" | "right_side" | "left_side";
+    label: string;
+    description: string;
+    camera: { x: number; y: number; zoom: number; rotation: number };
+  }>;
+  performance_model: Record<string, unknown>;
   pipeline: string[];
   artifacts: Record<string, string>;
   ffmpeg_command: string[];
@@ -86,7 +103,12 @@ export type TutorialVideoPlan = {
     duration_s: number;
     bridge_id: string;
     region: string;
+    string_material: string;
+    course: number;
     octave_lane: number;
     highlight: SantoorEvent["highlight"];
+    mallet: string;
+    resonance_s: number;
+    playable_label: string;
   }>;
 };

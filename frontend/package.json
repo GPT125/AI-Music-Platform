@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "tsc -b && vite build",
+    "build": "tsc --noEmit && vite build",
     "lint": "eslint src e2e vite.config.ts playwright.config.ts eslint.config.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --pool=threads --minWorkers=1 --maxWorkers=1",

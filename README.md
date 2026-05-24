@@ -2,7 +2,16 @@
 
 A free-first MusicXML learning platform for Persian Santoor, with a polished React interface, FastAPI backend, private beta login, Santoor-aware mapping, generated accompaniment, and a browser microphone score follower.
 
-The tutorial-video MVP follows the original research plan without a third-party video-generation service: MusicXML is corrected first, Santoor events drive the notation cursor and bridge/octave overlay, audio is derived from the same timeline, and FFmpeg muxes rendered frames plus WAV into MP4. No video API key is required for this deterministic path.
+The tutorial-video MVP follows the original research plan without a third-party video-generation service: MusicXML is corrected first, Santoor events drive the notation cursor, bridge/octave overlay, mallet hand, and three camera views, audio is derived from the same timeline, and FFmpeg can mux rendered frames plus WAV into MP4. No video API key is required for this deterministic path.
+
+## Research-backed Santoor Model
+
+- Persian santur is modeled as a hammered dulcimer/struck zither with two rows of nine bridges, 18 courses, and 72 strings in four-string courses.
+- The default preset is a practical G/Sol Santoor layout with yellow bass, white middle, and behind-bridge high lanes. It includes Persian quarter-tone slots for koron/sori mapping and exposes `course`, `string_material`, `playable_label`, mallet hand, and resonance metadata per note.
+- Printed PDF/image score import uses Audiveris when `OMR_AUDIVERIS_PATH` is configured. The result is marked `needs_correction`, because OMR output must be reviewed before serious performance use.
+- The orchestra engine uses free General MIDI SoundFont samples by default. For a pay-quality Santoor sound, provide a licensed recorded santur sample pack at `SANTOOR_SAMPLE_BASE_URL` and `VITE_SANTOOR_SAMPLE_BASE_URL` using note files such as `C4.mp3`, `D#4.mp3`, etc.
+
+References used for the model and implementation direction: Britannica on santoor/santur construction, Vancouver Inter-Cultural Orchestra santur range/tuning notes, Persian Music Academy/Organology summaries of 72 strings and nine bridges per row, and Audiveris CLI documentation for batch MusicXML export.
 
 ## Local Setup
 

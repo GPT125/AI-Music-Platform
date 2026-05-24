@@ -74,6 +74,19 @@ def test_musicxml_upload_maps_santoor_events(tmp_path: Path):
     assert len(score["events"]) == 3
     assert score["events"][1]["accidental_cents"] == -50
     assert "bridge_id" in score["events"][0]
+    assert score["events"][0]["strings"] == 4
+    assert score["events"][0]["region"] in {"yellow_bass", "white_middle", "white_behind_bridge"}
+
+
+def test_santoor_tuning_summary_exposes_courses():
+    reset_db()
+    client = TestClient(app)
+    response = client.get("/api/santoor/tuning")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["strings"] == 72
+    assert payload["courses"] == 18
+    assert len(payload["notes"]) == 9
 
 
 def test_arrangement_requires_score_then_generates_tracks():
@@ -115,4 +128,6 @@ def test_tutorial_video_plan_uses_score_timeline_without_api_key():
     assert plan["requires_api_key"] is False
     assert plan["event_count"] == 3
     assert plan["cues"][1]["label"] == "E quarter-flat 4"
+    assert len(plan["views"]) == 3
+    assert plan["cues"][0]["mallet"] in {"left", "right"}
     assert plan["ffmpeg_command"][0] == "ffmpeg"

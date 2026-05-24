@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     upload_max_mb: int = 25
     storage_dir: str = "backend/storage"
     soundfont_base_url: str = "https://gleitz.github.io/midi-js-soundfonts/FluidR3_GM/"
+    santoor_sample_base_url: str = ""
     omr_audiveris_path: str = ""
     omr_homr_path: str = ""
     omr_oemer_path: str = ""
