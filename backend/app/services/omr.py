@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 import subprocess
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -11,9 +12,37 @@ class OmrNotConfigured(RuntimeError):
     pass
 
 
+def resolve_audiveris_path(configured_path: str = "") -> str:
+    candidates = []
+    if configured_path:
+        candidates.append(configured_path)
+
+    path_binary = shutil.which("audiveris") or shutil.which("Audiveris")
+    if path_binary:
+        candidates.append(path_binary)
+
+    repo_root = Path(__file__).resolve().parents[3]
+    candidates.extend(
+        [
+            repo_root / "tools" / "audiveris" / "Audiveris.app" / "Contents" / "MacOS" / "Audiveris",
+            Path("/Applications/Audiveris.app/Contents/MacOS/Audiveris"),
+            Path.home() / "Applications" / "Audiveris.app" / "Contents" / "MacOS" / "Audiveris",
+        ]
+    )
+
+    for candidate in candidates:
+        candidate_path = Path(candidate).expanduser()
+        if candidate_path.is_file():
+            return str(candidate_path)
+    return ""
+
+
 def run_audiveris(asset_path: str, audiveris_path: str, timeout_s: int = 180) -> Dict[str, Any]:
-    if not audiveris_path:
-        raise OmrNotConfigured("Audiveris is not configured. Set OMR_AUDIVERIS_PATH to enable PDF/image recognition.")
+    resolved_path = resolve_audiveris_path(audiveris_path)
+    if not resolved_path:
+        raise OmrNotConfigured(
+            "Audiveris is not available. Install Audiveris or set OMR_AUDIVERIS_PATH to its executable to enable PDF/image recognition."
+        )
 
     source = Path(asset_path)
     if not source.exists():
@@ -22,7 +51,7 @@ def run_audiveris(asset_path: str, audiveris_path: str, timeout_s: int = 180) ->
     output_dir = source.parent / "omr"
     output_dir.mkdir(parents=True, exist_ok=True)
     command = [
-        audiveris_path,
+        resolved_path,
         "-batch",
         "-export",
         "-output",

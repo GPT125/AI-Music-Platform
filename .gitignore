@@ -9,6 +9,7 @@ frontend/dist/
 frontend/tsconfig.tsbuildinfo
 backend/storage/
 backend/data/
+tools/audiveris/
 backend/.pytest_cache/
 backend/__pycache__/
 **/__pycache__/

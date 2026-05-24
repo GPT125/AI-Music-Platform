@@ -6,6 +6,7 @@ from backend.app.auth import COOKIE_NAME, create_token
 from backend.app.db import Base, SessionLocal, engine
 from backend.app.main import app
 from backend.app.models import User
+from backend.app.services.omr import resolve_audiveris_path
 
 
 SAMPLE_MUSICXML = """<?xml version="1.0" encoding="UTF-8"?>
@@ -90,6 +91,30 @@ def test_musicxml_upload_maps_santoor_events(tmp_path: Path):
     assert score["events"][0]["region"] in {"yellow_bass", "white_middle", "white_behind_bridge"}
 
 
+def test_image_upload_runs_configured_omr(monkeypatch):
+    reset_db()
+    client = TestClient(app)
+    login(client)
+    project = client.post("/api/projects", json={"name": "OMR image"}).json()
+
+    def fake_omr(asset_path: str, audiveris_path: str):
+        assert asset_path.endswith(".png")
+        return {"musicxml": SAMPLE_MUSICXML, "source_format": "omr:musicxml", "export_path": "/tmp/fake.musicxml"}
+
+    monkeypatch.setattr("backend.app.api.try_run_omr", fake_omr)
+    response = client.post(
+        f"/api/projects/{project['id']}/assets",
+        files={"file": ("score.png", b"fake-image", "image/png")},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "processed"
+    assert "OMR recognized 3 notes" in payload["message"]
+    score = client.get(f"/api/projects/{project['id']}/score").json()
+    assert score["status"] == "needs_correction"
+    assert len(score["events"]) == 3
+
+
 def test_santoor_tuning_summary_exposes_courses():
     reset_db()
     client = TestClient(app)
@@ -99,6 +124,12 @@ def test_santoor_tuning_summary_exposes_courses():
     assert payload["strings"] == 72
     assert payload["courses"] == 18
     assert len(payload["notes"]) == 9
+
+
+def test_audiveris_path_accepts_configured_tool(tmp_path: Path):
+    tool = tmp_path / "audiveris"
+    tool.write_text("#!/bin/sh\n")
+    assert resolve_audiveris_path(str(tool)) == str(tool)
 
 
 def test_arrangement_requires_score_then_generates_tracks():

@@ -23,6 +23,30 @@ import {
 import Login from "./Login";
 import type { ArrangementPayload, Instrument, Project, ScorePayload, TutorialVideoPlan, User } from "./types";
 
+type WorkspaceTab = "score" | "video" | "orchestra";
+
+const demoMusicXml = `<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="4.0">
+  <part-list><score-part id="P1"><part-name>Santoor</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>2</divisions><time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes>
+      <direction><direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>84</per-minute></metronome></direction-type></direction>
+      <note><pitch><step>G</step><octave>4</octave></pitch><duration>2</duration><type>quarter</type></note>
+      <note><pitch><step>A</step><octave>4</octave></pitch><duration>2</duration><type>quarter</type></note>
+      <note><pitch><step>B</step><alter>-0.5</alter><octave>4</octave></pitch><duration>2</duration><type>quarter</type></note>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>2</duration><type>quarter</type></note>
+    </measure>
+    <measure number="2">
+      <note><pitch><step>D</step><octave>5</octave></pitch><duration>1</duration><type>eighth</type></note>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>1</duration><type>eighth</type></note>
+      <note><pitch><step>B</step><alter>-0.5</alter><octave>4</octave></pitch><duration>2</duration><type>quarter</type></note>
+      <note><pitch><step>A</step><octave>4</octave></pitch><duration>2</duration><type>quarter</type></note>
+      <note><pitch><step>G</step><octave>4</octave></pitch><duration>2</duration><type>quarter</type></note>
+    </measure>
+  </part>
+</score-partwise>`;
+
 const initialFollower: FollowerState = {
   index: 0,
   confidence: 0,
@@ -45,6 +69,7 @@ function App() {
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [activeFollowerIndex, setActiveFollowerIndex] = useState(0);
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>("video");
 
   const selectedProject = projects.find((project) => project.id === selectedId) ?? null;
 
@@ -73,6 +98,26 @@ function App() {
     setSelectedId((current) => current ?? items[0]?.id ?? null);
   }
 
+  async function createDemoProject() {
+    setBusy(true);
+    try {
+      const project = await api.createProject("Santoor demo");
+      setSelectedId(project.id);
+      await api.updateScore(project.id, demoMusicXml);
+      const nextScore = await api.score(project.id);
+      setScore(nextScore);
+      await refreshProjects();
+      setSelectedId(project.id);
+      setArrangement(await api.arrange(project.id, selectedInstruments));
+      setNotice("Demo score loaded. Open Performance Video or Live Orchestra.");
+      setActiveTab("video");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not create demo project");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (!authChecked) {
     return <ShellLoader />;
   }
@@ -97,6 +142,9 @@ function App() {
             setSelectedId(project.id);
           }}
         />
+        <button className="demo-button" onClick={createDemoProject} disabled={busy}>
+          <Play size={17} /> Try working demo
+        </button>
         <nav className="project-list">
           {projects.map((project) => (
             <button
@@ -124,11 +172,11 @@ function App() {
       <main className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">Santoor now · all instruments architecture</p>
+            <p className="eyebrow">Performance workspace</p>
             <h1>{selectedProject?.name ?? "Create a project"}</h1>
           </div>
           <div className="status-pills">
-            <span><ShieldCheck size={15} /> Google account</span>
+            <span><ShieldCheck size={15} /> {user.auth_provider === "guest" ? "Guest session" : "Saved account"}</span>
             <span><Activity size={15} /> {score?.status ?? "no score"}</span>
             <span><AudioLines size={15} /> {arrangement ? "orchestra ready" : "arrangement pending"}</span>
           </div>
@@ -137,60 +185,89 @@ function App() {
         {notice && <div className="notice">{notice}</div>}
 
         {selectedProject ? (
-          <div className="grid">
-            <UploadPanel
-              projectId={selectedProject.id}
-              onUploaded={async (message) => {
-                setNotice(message);
-                await refreshProjects();
-                setScore(await api.score(selectedProject.id));
-              }}
-            />
-            <ScorePanel score={score} projectId={selectedProject.id} onUpdated={setScore} />
+          <>
             <HeroConsole score={score} arrangement={arrangement} followerIndex={activeFollowerIndex} />
-            <SantoorPanel score={score} activeIndex={activeFollowerIndex} />
-            <TutorialVideoPanel
-              score={score}
-              arrangement={arrangement}
-              plan={videoPlan}
-              onCreate={async () => {
-                setBusy(true);
-                try {
-                  const result = await api.tutorialVideo(selectedProject.id, arrangement?.id);
-                  setVideoPlan(result.render_plan);
-                  setNotice(result.message);
-                } catch (error) {
-                  setNotice(error instanceof Error ? error.message : "Could not create tutorial video plan");
-                } finally {
-                  setBusy(false);
-                }
-              }}
-              busy={busy}
-            />
-            <OrchestraPanel
-              busy={busy}
-              instruments={instruments}
-              selected={selectedInstruments}
-              setSelected={setSelectedInstruments}
-              arrangement={arrangement}
-              onGenerate={async () => {
-                setBusy(true);
-                try {
-                  setArrangement(await api.arrange(selectedProject.id, selectedInstruments));
-                } catch (error) {
-                  setNotice(error instanceof Error ? error.message : "Could not generate arrangement");
-                } finally {
-                  setBusy(false);
-                }
-              }}
-            />
-            <LiveOrchestraPanel score={score} arrangement={arrangement} onFollowerIndex={setActiveFollowerIndex} />
-          </div>
+            <div className="studio-tabs" role="tablist" aria-label="Workspace sections">
+              {[
+                ["video", "Performance Video", Projector],
+                ["orchestra", "Live Orchestra", AudioLines],
+                ["score", "Score Setup", FileMusic],
+              ].map(([id, label, Icon]) => (
+                <button key={id as string} className={activeTab === id ? "active" : ""} onClick={() => setActiveTab(id as WorkspaceTab)}>
+                  <Icon size={17} /> {label as string}
+                </button>
+              ))}
+            </div>
+
+            {activeTab === "video" && (
+              <div className="studio-layout video-layout">
+                <TutorialVideoPanel
+                  score={score}
+                  arrangement={arrangement}
+                  plan={videoPlan}
+                  onCreate={async () => {
+                    setBusy(true);
+                    try {
+                      const result = await api.tutorialVideo(selectedProject.id, arrangement?.id);
+                      setVideoPlan(result.render_plan);
+                      setNotice(result.message);
+                    } catch (error) {
+                      setNotice(error instanceof Error ? error.message : "Could not create tutorial video plan");
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                  busy={busy}
+                />
+                <SantoorPanel score={score} activeIndex={activeFollowerIndex} />
+              </div>
+            )}
+
+            {activeTab === "orchestra" && (
+              <div className="studio-layout">
+                <OrchestraPanel
+                  busy={busy}
+                  instruments={instruments}
+                  selected={selectedInstruments}
+                  setSelected={setSelectedInstruments}
+                  arrangement={arrangement}
+                  onGenerate={async () => {
+                    setBusy(true);
+                    try {
+                      setArrangement(await api.arrange(selectedProject.id, selectedInstruments));
+                    } catch (error) {
+                      setNotice(error instanceof Error ? error.message : "Could not generate arrangement");
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                />
+                <LiveOrchestraPanel score={score} arrangement={arrangement} onFollowerIndex={setActiveFollowerIndex} />
+              </div>
+            )}
+
+            {activeTab === "score" && (
+              <div className="studio-layout">
+                <UploadPanel
+                  projectId={selectedProject.id}
+                  onUploaded={async (message) => {
+                    setNotice(message);
+                    await refreshProjects();
+                    setScore(await api.score(selectedProject.id));
+                    setVideoPlan(null);
+                    setArrangement(null);
+                  }}
+                />
+                <ScorePanel score={score} projectId={selectedProject.id} onUpdated={setScore} />
+              </div>
+            )}
+          </>
         ) : (
           <div className="empty-state">
             <Music2 size={44} />
             <h2>No projects yet</h2>
-            <p>Create your first learning project to upload a MusicXML score and start the live orchestra workflow.</p>
+            <p>Create a project or load the demo score to see the video renderer and orchestra flow immediately.</p>
+            <button className="primary" onClick={createDemoProject} disabled={busy}><Play size={17} /> Load demo score</button>
           </div>
         )}
       </main>
@@ -372,7 +449,7 @@ function TutorialVideoPanel({
   onCreate: () => Promise<void>;
   busy: boolean;
 }) {
-  const [view, setView] = useState<"overhead" | "right_side" | "left_side">("overhead");
+  const [view, setView] = useState<"overhead" | "right_side" | "left_side">("left_side");
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [previewTime, setPreviewTime] = useState(0);
   const cues = plan?.cues.slice(0, 6) ?? score?.events.slice(0, 6).map((event) => ({
@@ -419,12 +496,15 @@ function TutorialVideoPanel({
   }, [duration, isPreviewing]);
 
   return (
-    <section className="panel video-panel">
-      <div className="panel-title"><Projector size={18} /><h2>Tutorial Video</h2></div>
+    <section className="panel video-panel feature-panel">
+      <div className="panel-title split-title">
+        <div><Projector size={18} /><h2>Performance Video</h2></div>
+        <span>{activeCue ? `${activeCue.playable_label} · ${activeCue.bridge_id}` : "Waiting for score"}</span>
+      </div>
       <div className="view-tabs" role="tablist" aria-label="Santoor video camera view">
         {(["overhead", "right_side", "left_side"] as const).map((item) => (
           <button key={item} className={view === item ? "active" : ""} onClick={() => setView(item)}>
-            {item === "overhead" ? "High" : item === "right_side" ? "Right" : "Left"}
+            {item === "overhead" ? "High hands" : item === "right_side" ? "Right angle" : "Left angle"}
           </button>
         ))}
       </div>
@@ -472,8 +552,8 @@ function TutorialVideoPanel({
         </div>
       </div>
       <div className="video-meta">
-        <span><strong>{plan?.renderer ?? "ffmpeg"}</strong> renderer</span>
-        <span><strong>{plan?.requires_api_key ? "Yes" : "No"}</strong> API key</span>
+        <span><strong>{activeCue?.mallet ?? "-"}</strong> mallet</span>
+        <span><strong>{activeCue?.region?.replace(/_/g, " ") ?? "-"}</strong> string row</span>
         <span><strong>{plan ? `${plan.duration_s.toFixed(1)}s` : `${score?.events.length ?? 0} notes`}</strong> timeline</span>
       </div>
       <div className="transport compact">
@@ -492,9 +572,7 @@ function TutorialVideoPanel({
       <button className="primary" onClick={onCreate} disabled={busy || !score?.events.length}>
         <Projector size={17} /> {busy ? "Preparing" : "Create 3-view video timeline"}
       </button>
-      <p className="small-note">
-        {plan?.api_key_policy ?? "The MVP uses generated frames plus audio muxed by FFmpeg, so no external AI video key is required."}
-      </p>
+      <p className="small-note">Left-angle view is the primary tutorial camera. It is generated from the score timeline, so every mallet hit follows the parsed Santoor note map.</p>
       {arrangement && <p className="success">Video plan can use the current {arrangement.tracks.length}-track arrangement as its audio source.</p>}
     </section>
   );
