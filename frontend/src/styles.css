@@ -898,6 +898,33 @@ textarea {
   font-weight: 800;
 }
 
+.guest-button {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 10px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: #fffaf2;
+  background: #172225;
+  border: 1px solid #172225;
+  box-shadow: 0 12px 30px rgb(18 28 31 / 18%);
+  font-weight: 800;
+}
+
+.guest-button:disabled {
+  opacity: 0.68;
+  cursor: progress;
+}
+
+.guest-note {
+  margin: 10px 0 0;
+  font-size: 0.86rem;
+  color: #766c60;
+}
+
 .login-stats {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

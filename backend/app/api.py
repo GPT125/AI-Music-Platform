@@ -11,6 +11,7 @@ from backend.app.auth import (
     clear_auth_cookie,
     create_google_auth_url,
     create_google_state,
+    create_guest_user,
     current_user,
     exchange_google_code,
     set_auth_cookie,
@@ -93,6 +94,13 @@ def google_config() -> dict:
 def google_credential(payload: GoogleCredentialRequest, response: Response, db: Session = Depends(get_db)) -> User:
     profile = verify_google_credential(payload.credential)
     user = upsert_google_user(db, profile)
+    set_auth_cookie(response, user)
+    return user
+
+
+@router.post("/auth/guest", response_model=UserOut)
+def guest_login(response: Response, db: Session = Depends(get_db)) -> User:
+    user = create_guest_user(db)
     set_auth_cookie(response, user)
     return user
 

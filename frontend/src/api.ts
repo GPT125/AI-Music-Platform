@@ -30,6 +30,7 @@ export const api = {
   googleConfig: () => request<{ client_id: string; configured: boolean }>("/api/auth/google/config"),
   googleCredential: (credential: string) =>
     request<User>("/api/auth/google/credential", { method: "POST", body: JSON.stringify({ credential }) }),
+  guestLogin: () => request<User>("/api/auth/guest", { method: "POST" }),
   logout: () => request<{ ok: boolean }>("/api/auth/logout", { method: "POST" }),
   projects: () => request<Project[]>("/api/projects"),
   createProject: (name: string) =>

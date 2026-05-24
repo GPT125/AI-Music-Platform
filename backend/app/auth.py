@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 import secrets
+import uuid
 from typing import Optional
 from urllib.parse import urlencode
 
@@ -130,6 +131,23 @@ def upsert_google_user(db: Session, profile: dict) -> User:
     user.google_sub = google_sub
     user.name = str(profile.get("name", ""))[:255]
     user.avatar_url = str(profile.get("picture", ""))
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def create_guest_user(db: Session) -> User:
+    guest_id = uuid.uuid4().hex
+    user = User(
+        email=f"guest-{guest_id}@guest.santoorai.app",
+        password_hash="",
+        is_admin=False,
+        auth_provider="guest",
+        google_sub="",
+        name="Guest",
+        avatar_url="",
+    )
+    db.add(user)
     db.commit()
     db.refresh(user)
     return user

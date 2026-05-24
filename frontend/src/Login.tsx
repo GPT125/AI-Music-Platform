@@ -4,6 +4,7 @@ import { AudioLines, Globe2, Music2, RadioTower, Sparkles } from "./icons";
 
 function Login() {
   const [error, setError] = useState("");
+  const [guestBusy, setGuestBusy] = useState(false);
   const [fallbackReady, setFallbackReady] = useState(true);
   const buttonRef = useRef<HTMLDivElement | null>(null);
 
@@ -86,6 +87,24 @@ function Login() {
             <Globe2 size={20} /> Sign in or sign up with Google
           </button>
         )}
+        <button
+          className="guest-button"
+          disabled={guestBusy}
+          onClick={async () => {
+            setError("");
+            setGuestBusy(true);
+            try {
+              await api.guestLogin();
+              window.location.assign("/");
+            } catch (guestError) {
+              setError(guestError instanceof Error ? guestError.message : "Guest session failed");
+              setGuestBusy(false);
+            }
+          }}
+        >
+          <Music2 size={20} /> {guestBusy ? "Starting guest session" : "Continue as guest"}
+        </button>
+        <p className="guest-note">Guest projects stay in this browser session. Use Google when you want a saved account.</p>
         <div className="login-stats">
           <span><Sparkles size={16} /> MusicXML</span>
           <span><RadioTower size={16} /> Live mic sync</span>

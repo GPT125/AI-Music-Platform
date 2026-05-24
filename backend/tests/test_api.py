@@ -58,6 +58,18 @@ def test_private_routes_require_authentication():
     assert response.status_code == 401
 
 
+def test_guest_login_creates_session():
+    reset_db()
+    client = TestClient(app)
+    response = client.post("/api/auth/guest")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["auth_provider"] == "guest"
+    assert payload["name"] == "Guest"
+    projects = client.get("/api/projects")
+    assert projects.status_code == 200
+
+
 def test_musicxml_upload_maps_santoor_events(tmp_path: Path):
     reset_db()
     client = TestClient(app)
