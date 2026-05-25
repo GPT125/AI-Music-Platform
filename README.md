@@ -2,7 +2,7 @@
 
 A free-first MusicXML learning platform for Persian Santoor, with a polished React interface, FastAPI backend, private beta login, Santoor-aware mapping, generated accompaniment, and a browser microphone score follower.
 
-The tutorial-video MVP follows the original research plan without a third-party video-generation service: MusicXML is corrected first, Santoor events drive the notation cursor, bridge/octave overlay, mallet hand, and three camera views, audio is derived from the same timeline, and FFmpeg can mux rendered frames plus WAV into MP4. No video API key is required for this deterministic path.
+The tutorial-video MVP follows the original research plan without a third-party video-generation service: MusicXML is corrected first, Santoor events drive the notation cursor, bridge/course overlay, mallet strikes, beat timing, and generated guide audio, and FFmpeg renders a playable MP4. No video API key is required for this deterministic path.
 
 The app supports Google sign-in and a guest mode. Guest mode creates an isolated temporary account so the upload, demo score, video renderer, and orchestra flows work without configuring Google auth first.
 
@@ -60,6 +60,10 @@ References used for the model and implementation direction: Britannica on santoo
 ## Render
 
 This repo is configured for a single free Render web service and a free Render Postgres database through `render.yaml`. Render deployment requires a GitHub/GitLab/Bitbucket remote. Free Render Postgres expires after 30 days, so move to a paid database or external free-tier Postgres before storing durable user data.
+
+## Tutorial Video
+
+`POST /api/projects/{project_id}/tutorial-video` renders an authenticated MP4 lesson video and returns a `video_url`. The current local renderer uses FFmpeg, generated Santoor performer frames, animated mallet strikes, and generated guide audio.
 
 ## Verification
 
