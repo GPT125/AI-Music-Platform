@@ -71,6 +71,7 @@ function App() {
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [activeFollowerIndex, setActiveFollowerIndex] = useState(0);
+  const previewEngineRef = useRef<OrchestraEngine | null>(null);
   const [activeTab, setActiveTab] = useState<WorkspaceTab>("video");
 
   const selectedProject = projects.find((project) => project.id === selectedId) ?? null;
@@ -235,6 +236,11 @@ function App() {
                   selected={selectedInstruments}
                   setSelected={setSelectedInstruments}
                   arrangement={arrangement}
+                  onPreview={async (instrument) => {
+                    const engine = previewEngineRef.current ?? new OrchestraEngine();
+                    previewEngineRef.current = engine;
+                    await engine.previewInstrument(instrument);
+                  }}
                   onGenerate={async () => {
                     setBusy(true);
                     try {
@@ -677,6 +683,7 @@ function OrchestraPanel({
   selected,
   setSelected,
   arrangement,
+  onPreview,
   onGenerate,
   busy,
 }: {
@@ -684,9 +691,27 @@ function OrchestraPanel({
   selected: string[];
   setSelected: (selected: string[]) => void;
   arrangement: ArrangementPayload | null;
+  onPreview: (instrument: Instrument) => Promise<void>;
   onGenerate: () => Promise<void>;
   busy: boolean;
 }) {
+  const [soundStatus, setSoundStatus] = useState("Built-in orchestra audio ready");
+
+  async function preview(instrument: Instrument) {
+    setSoundStatus(`Testing ${instrument.name}...`);
+    try {
+      await Promise.race([
+        onPreview(instrument),
+        new Promise((resolve) => {
+          window.setTimeout(resolve, 1800);
+        }),
+      ]);
+      setSoundStatus(`${instrument.name} sound check played`);
+    } catch (error) {
+      setSoundStatus(error instanceof Error ? error.message : "Browser blocked audio. Click again to unlock sound.");
+    }
+  }
+
   return (
     <section className="panel orchestra-panel">
       <div className="panel-title"><AudioLines size={18} /><h2>Orchestra Builder</h2></div>
@@ -706,12 +731,24 @@ function OrchestraPanel({
             />
             <span>{instrument.name}</span>
             <small>{instrument.family}</small>
+            <button
+              type="button"
+              className="sound-test"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                void preview(instrument);
+              }}
+            >
+              <Play size={13} /> Test
+            </button>
           </label>
         ))}
       </div>
       <button className="primary" onClick={onGenerate} disabled={busy || selected.length === 0}>
         <Wand2 size={17} /> {busy ? "Generating" : "Generate arrangement"}
       </button>
+      <p className="small-note">{soundStatus}</p>
       {arrangement && <p className="success">{arrangement.tracks.length} playable tracks ready for live following.</p>}
     </section>
   );
@@ -778,13 +815,18 @@ function LiveOrchestraPanel({
 
   async function start() {
     if (!arrangement) return;
-    const engine = engineRef.current ?? new OrchestraEngine();
-    engineRef.current = engine;
-    await engine.start();
-    engine.schedule(arrangement.tracks);
-    engine.playFrom(currentEvent?.onset_s ?? 0);
-    setFollower((previous) => ({ ...previous, isPaused: false }));
-    setPlaying(true);
+    try {
+      const engine = engineRef.current ?? new OrchestraEngine();
+      engineRef.current = engine;
+      await engine.start();
+      engine.schedule(arrangement.tracks);
+      engine.playFrom(currentEvent?.onset_s ?? 0);
+      setFollower((previous) => ({ ...previous, isPaused: false }));
+      setPlaying(true);
+      setMicState((state) => (state === "Not connected" ? "Audio playing without mic" : state));
+    } catch (error) {
+      setMicState(error instanceof Error ? error.message : "Browser blocked audio. Click Follow & play again.");
+    }
   }
 
   function stop() {

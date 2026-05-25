@@ -887,6 +887,23 @@ textarea {
   color: #776a5a;
 }
 
+.sound-test {
+  grid-column: 2;
+  justify-self: start;
+  min-height: 28px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid #d6ddd9;
+  background: #f8faf9;
+  color: #273230;
+  font-size: 0.78rem;
+}
+
+.sound-test:hover {
+  border-color: #226b5f;
+  background: #eef7f4;
+}
+
 .live-readout {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
