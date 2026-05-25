@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from fastapi import APIRouter, Cookie, Depends, File, HTTPException, Query, Response, UploadFile, status
-from fastapi.responses import RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from backend.app.auth import (
@@ -31,11 +31,12 @@ from backend.app.schemas import (
     TutorialVideoRequest,
     UserOut,
 )
+from backend.app.services.ai import ai_status, generate_practice_feedback
 from backend.app.services.arrangement import generate_arrangement, instrument_catalog
 from backend.app.services.musicxml import parse_musicxml_events, read_score_payload
 from backend.app.services.omr import OmrNotConfigured, try_run_omr
 from backend.app.services.santoor import build_santoor_events, tuning_summary
-from backend.app.services.video import build_tutorial_video_plan
+from backend.app.services.video import render_tutorial_video
 
 
 router = APIRouter(prefix="/api")
@@ -143,6 +144,11 @@ def me(user: User = Depends(current_user)) -> User:
 @router.get("/instruments")
 def instruments() -> dict:
     return {"instruments": instrument_catalog()}
+
+
+@router.get("/ai/status")
+def get_ai_status() -> dict:
+    return ai_status()
 
 
 @router.get("/santoor/tuning")
@@ -368,10 +374,11 @@ def create_job(
             job.message = "No score events are available for tutorial video"
             job.progress = 100
         else:
-            plan = build_tutorial_video_plan(project.score.events)
+            output_dir = Path(get_settings().storage_dir) / "renders" / project.id / "latest"
+            plan = render_tutorial_video(project.score.events, str(output_dir))
             job.status = "completed"
             job.progress = 100
-            job.message = "Tutorial video render plan is ready"
+            job.message = "Tutorial video MP4 is ready"
             job.result = plan
     else:
         job.status = "completed"
@@ -471,6 +478,19 @@ def create_arrangement(
     return {"id": arrangement.id, "name": arrangement.name, "tracks": arrangement.tracks}
 
 
+@router.post("/projects/{project_id}/ai-feedback")
+async def create_ai_feedback(
+    project_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> dict:
+    project = project_for_user(db, project_id, user)
+    if not project.score or not project.score.events:
+        raise HTTPException(status_code=400, detail="Import or load a score before asking the AI coach")
+    feedback = await generate_practice_feedback(project.name, project.score.events)
+    return {"feedback": feedback, "ai": ai_status()}
+
+
 @router.post("/projects/{project_id}/tutorial-video")
 def create_tutorial_video(
     project_id: str,
@@ -485,16 +505,33 @@ def create_tutorial_video(
         arrangement = db.get(Arrangement, payload.arrangement_id)
         if not arrangement or arrangement.project_id != project.id:
             raise HTTPException(status_code=404, detail="Arrangement not found")
-    plan = build_tutorial_video_plan(project.score.events, payload.arrangement_id, payload.fps)
+    output_dir = Path(get_settings().storage_dir) / "renders" / project.id / datetime.utcnow().strftime("%Y%m%d%H%M%S")
+    plan = render_tutorial_video(project.score.events, str(output_dir), payload.arrangement_id, payload.fps)
+    video_path = Path(plan["artifacts"]["video"])
+    plan["video_url"] = f"/api/projects/{project.id}/tutorial-video/{video_path.parent.name}"
     job = Job(
         project_id=project.id,
         type="video",
         status="completed",
         progress=100,
-        message="Tutorial video render plan is ready",
+        message="Tutorial video MP4 is ready",
         result=plan,
     )
     db.add(job)
     project.updated_at = datetime.utcnow()
     db.commit()
     return {"job_id": job.id, "message": job.message, "render_plan": plan}
+
+
+@router.get("/projects/{project_id}/tutorial-video/{render_id}")
+def get_tutorial_video(
+    project_id: str,
+    render_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> FileResponse:
+    project = project_for_user(db, project_id, user)
+    video_path = Path(get_settings().storage_dir) / "renders" / project.id / render_id / "tutorial.mp4"
+    if not video_path.exists():
+        raise HTTPException(status_code=404, detail="Tutorial video not found")
+    return FileResponse(str(video_path), media_type="video/mp4", filename=f"{project.name}-tutorial.mp4")

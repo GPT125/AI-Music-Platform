@@ -22,7 +22,18 @@ class Settings(BaseSettings):
     omr_audiveris_path: str = ""
     omr_homr_path: str = ""
     omr_oemer_path: str = ""
+    ai_provider: str = ""
     openai_api_key: str = ""
+    openai_model: str = "gpt-4o-mini"
+    groq_api_key: str = ""
+    groq_model: str = "llama-3.1-8b-instant"
+    deepseek_api_key: str = ""
+    deepseek_model: str = "deepseek-chat"
+    openrouter_api_key: str = ""
+    openrouter_model: str = "openai/gpt-4o-mini"
+    openrouter_referer: str = ""
+    huggingface_api_key: str = ""
+    huggingface_model: str = ""
     render_api_key: str = ""
 
     model_config = SettingsConfigDict(

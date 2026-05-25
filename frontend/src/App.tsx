@@ -21,9 +21,9 @@ import {
   Wand2,
 } from "./icons";
 import Login from "./Login";
-import type { ArrangementPayload, Instrument, Project, ScorePayload, TutorialVideoPlan, User } from "./types";
+import type { AIFeedback, AIStatus, ArrangementPayload, Instrument, Project, ScorePayload, TutorialVideoPlan, User } from "./types";
 
-type WorkspaceTab = "score" | "video" | "orchestra";
+type WorkspaceTab = "score" | "video" | "orchestra" | "ai";
 
 const demoMusicXml = `<?xml version="1.0" encoding="UTF-8"?>
 <score-partwise version="4.0">
@@ -66,6 +66,8 @@ function App() {
   const [selectedInstruments, setSelectedInstruments] = useState<string[]>(["string_ensemble_1", "flute", "cello", "acoustic_grand_piano"]);
   const [arrangement, setArrangement] = useState<ArrangementPayload | null>(null);
   const [videoPlan, setVideoPlan] = useState<TutorialVideoPlan | null>(null);
+  const [aiStatus, setAiStatus] = useState<AIStatus | null>(null);
+  const [aiFeedback, setAiFeedback] = useState<AIFeedback | null>(null);
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [activeFollowerIndex, setActiveFollowerIndex] = useState(0);
@@ -80,6 +82,7 @@ function App() {
       .catch(() => setUser(null))
       .finally(() => setAuthChecked(true));
     api.instruments().then((payload) => setInstruments(payload.instruments)).catch(() => undefined);
+    api.aiStatus().then(setAiStatus).catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -191,6 +194,7 @@ function App() {
               {[
                 ["video", "Performance Video", Projector],
                 ["orchestra", "Live Orchestra", AudioLines],
+                ["ai", "AI Coach", Wand2],
                 ["score", "Score Setup", FileMusic],
               ].map(([id, label, Icon]) => (
                 <button key={id as string} className={activeTab === id ? "active" : ""} onClick={() => setActiveTab(id as WorkspaceTab)}>
@@ -210,7 +214,7 @@ function App() {
                     try {
                       const result = await api.tutorialVideo(selectedProject.id, arrangement?.id);
                       setVideoPlan(result.render_plan);
-                      setNotice(result.message);
+                      setNotice("Video generated. Use the player in Performance Video to review the lesson.");
                     } catch (error) {
                       setNotice(error instanceof Error ? error.message : "Could not create tutorial video plan");
                     } finally {
@@ -243,6 +247,31 @@ function App() {
                   }}
                 />
                 <LiveOrchestraPanel score={score} arrangement={arrangement} onFollowerIndex={setActiveFollowerIndex} />
+              </div>
+            )}
+
+            {activeTab === "ai" && (
+              <div className="studio-layout ai-layout">
+                <AICoachPanel
+                  score={score}
+                  status={aiStatus}
+                  feedback={aiFeedback}
+                  busy={busy}
+                  onGenerate={async () => {
+                    setBusy(true);
+                    try {
+                      const result = await api.aiFeedback(selectedProject.id);
+                      setAiFeedback(result.feedback);
+                      setAiStatus(result.ai);
+                      setNotice(`AI Coach used ${result.feedback._provider} (${result.feedback._model}).`);
+                    } catch (error) {
+                      setNotice(error instanceof Error ? error.message : "AI Coach could not generate feedback");
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                />
+                <SantoorPanel score={score} activeIndex={activeFollowerIndex} />
               </div>
             )}
 
@@ -389,9 +418,9 @@ function HeroConsole({
         ))}
       </div>
       <div className="hero-copy">
-        <p className="eyebrow">Real-time score follower</p>
-        <h2>{current ? `Following ${current.ui_label}` : "Upload a score to unlock live following"}</h2>
-        <p>Santoor is the active teaching model; the project data model, score timeline, and orchestra engine are built so additional instruments can be added cleanly.</p>
+        <p className="eyebrow">Santoor lesson renderer</p>
+        <h2>{current ? `${current.ui_label} on ${current.bridge_id}` : "Load a score to generate a playable lesson video"}</h2>
+        <p>Generate a performer-view video with mallet strikes, bridge position, octave lane, beat timing, and synthesized guide audio.</p>
       </div>
       <div className="hero-metrics">
         <div><strong>{events.length}</strong><span>mapped notes</span></div>
@@ -508,6 +537,9 @@ function TutorialVideoPanel({
           </button>
         ))}
       </div>
+      {plan?.video_url ? (
+        <video className="rendered-video" src={plan.video_url} controls playsInline />
+      ) : (
       <div className="video-stage">
         <div className={`performer-view ${view}`}>
           <div className="camera-label">
@@ -551,6 +583,7 @@ function TutorialVideoPanel({
           ))}
         </div>
       </div>
+      )}
       <div className="video-meta">
         <span><strong>{activeCue?.mallet ?? "-"}</strong> mallet</span>
         <span><strong>{activeCue?.region?.replace(/_/g, " ") ?? "-"}</strong> string row</span>
@@ -570,11 +603,72 @@ function TutorialVideoPanel({
         />
       </div>
       <button className="primary" onClick={onCreate} disabled={busy || !score?.events.length}>
-        <Projector size={17} /> {busy ? "Preparing" : "Create 3-view video timeline"}
+        <Projector size={17} /> {busy ? "Rendering MP4" : "Generate lesson video"}
       </button>
-      <p className="small-note">Left-angle view is the primary tutorial camera. It is generated from the score timeline, so every mallet hit follows the parsed Santoor note map.</p>
+      <p className="small-note">This creates a real MP4 from the score timeline. The left-side camera is the default because it shows the player hands and Santoor courses clearly.</p>
       {arrangement && <p className="success">Video plan can use the current {arrangement.tracks.length}-track arrangement as its audio source.</p>}
     </section>
+  );
+}
+
+function AICoachPanel({
+  score,
+  status,
+  feedback,
+  busy,
+  onGenerate,
+}: {
+  score: ScorePayload | null;
+  status: AIStatus | null;
+  feedback: AIFeedback | null;
+  busy: boolean;
+  onGenerate: () => Promise<void>;
+}) {
+  const providerLabel = status?.configured
+    ? `${status.providers[0]?.name ?? status.active_provider} · ${status.providers[0]?.model ?? "model"}`
+    : "Local fallback";
+  return (
+    <section className="panel ai-coach-panel feature-panel">
+      <div className="panel-title split-title">
+        <div><Wand2 size={18} /><h2>AI Coach</h2></div>
+        <span>{providerLabel}</span>
+      </div>
+      <div className="ai-hero">
+        <p className="eyebrow">Score-aware Santoor feedback</p>
+        <h3>{feedback?.summary ?? "Generate a practice plan from the uploaded score."}</h3>
+        <p>
+          The coach reads mapped notes, bridges, mallet alternation, timing, and Santoor rows. It uses your configured LLM keys when available and falls back to deterministic guidance when providers are unavailable.
+        </p>
+      </div>
+      <button className="primary" onClick={onGenerate} disabled={busy || !score?.events.length}>
+        <Wand2 size={17} /> {busy ? "Asking AI Coach" : "Generate AI feedback"}
+      </button>
+      {!score?.events.length && <p className="small-note">Load the demo or upload MusicXML before asking for AI feedback.</p>}
+      {feedback && (
+        <div className="ai-feedback-grid">
+          <FeedbackList title="Practice Plan" items={feedback.practice_plan} />
+          <FeedbackList title="Technique" items={feedback.technical_notes} />
+          <FeedbackList title="Rhythm" items={feedback.rhythm_notes} />
+          <FeedbackList title="Santoor Notes" items={feedback.santoor_notes} />
+          {feedback.risk_flags.length > 0 && <FeedbackList title="Warnings" items={feedback.risk_flags} />}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function FeedbackList({ title, items }: { title: string; items: string[] }) {
+  return (
+    <div className="feedback-list">
+      <strong>{title}</strong>
+      {items.length ? (
+        <ul>
+          {items.map((item, index) => <li key={`${title}-${index}`}>{item}</li>)}
+        </ul>
+      ) : (
+        <span>No notes returned.</span>
+      )}
+    </div>
   );
 }
 

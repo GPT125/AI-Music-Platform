@@ -284,6 +284,10 @@ h2 {
   grid-template-columns: minmax(620px, 1.5fr) minmax(330px, 0.8fr);
 }
 
+.studio-layout.ai-layout {
+  grid-template-columns: minmax(560px, 1.15fr) minmax(340px, 0.85fr);
+}
+
 .panel {
   background: #fff;
   border: 1px solid #e5e8ec;
@@ -595,6 +599,16 @@ textarea {
   background: #f6f8fa;
 }
 
+.rendered-video {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  display: block;
+  border: 1px solid #e5e8ec;
+  border-radius: 16px;
+  background: #08090c;
+  box-shadow: 0 18px 48px rgb(15 17 21 / 12%);
+}
+
 .view-tabs {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -801,6 +815,56 @@ textarea {
   overflow: auto;
   padding-right: 4px;
   margin-bottom: 14px;
+}
+
+.ai-hero {
+  border-radius: 14px;
+  padding: 22px;
+  color: #fff;
+  background:
+    linear-gradient(135deg, rgb(17 19 24 / 96%), rgb(43 49 65 / 92%)),
+    radial-gradient(circle at 80% 10%, rgb(185 199 255 / 28%), transparent 28%);
+  margin-bottom: 14px;
+}
+
+.ai-hero h3 {
+  margin: 0 0 10px;
+  font-size: clamp(1.3rem, 2vw, 2rem);
+  line-height: 1.12;
+}
+
+.ai-hero p {
+  color: #dbe1ef;
+  line-height: 1.55;
+}
+
+.ai-feedback-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.feedback-list {
+  border: 1px solid #e5e8ec;
+  border-radius: 12px;
+  padding: 14px;
+  background: #f8fafb;
+}
+
+.feedback-list strong {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.feedback-list ul {
+  margin: 0;
+  padding-left: 18px;
+  color: #59606b;
+}
+
+.feedback-list li + li {
+  margin-top: 6px;
 }
 
 .instrument-grid label {
@@ -1060,6 +1124,9 @@ textarea {
   }
 
   .grid,
+  .studio-layout,
+  .studio-layout.video-layout,
+  .studio-layout.ai-layout,
   .score-panel,
   .live-panel,
   .hero-console {
@@ -1069,6 +1136,10 @@ textarea {
 
   .live-readout {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .studio-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .workspace::before {
@@ -1098,6 +1169,11 @@ textarea {
   }
 
   .video-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .studio-tabs,
+  .ai-feedback-grid {
     grid-template-columns: 1fr;
   }
 

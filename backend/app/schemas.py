@@ -58,4 +58,4 @@ class ArrangementRequest(BaseModel):
 
 class TutorialVideoRequest(BaseModel):
     arrangement_id: Optional[str] = None
-    fps: int = Field(default=30, ge=12, le=60)
+    fps: int = Field(default=24, ge=12, le=60)

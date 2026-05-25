@@ -94,6 +94,8 @@ export type TutorialVideoPlan = {
   pipeline: string[];
   artifacts: Record<string, string>;
   ffmpeg_command: string[];
+  video_url?: string;
+  selected_view?: string;
   cues: Array<{
     event_id: string;
     label: string;
@@ -111,4 +113,23 @@ export type TutorialVideoPlan = {
     resonance_s: number;
     playable_label: string;
   }>;
+};
+
+export type AIStatus = {
+  configured: boolean;
+  active_provider: string | null;
+  providers: Array<{ id: string; name: string; model: string }>;
+  features: string[];
+};
+
+export type AIFeedback = {
+  summary: string;
+  practice_plan: string[];
+  technical_notes: string[];
+  rhythm_notes: string[];
+  santoor_notes: string[];
+  risk_flags: string[];
+  confidence: number;
+  _provider: string;
+  _model: string;
 };

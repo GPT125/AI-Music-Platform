@@ -6,6 +6,8 @@ The tutorial-video MVP follows the original research plan without a third-party 
 
 The app supports Google sign-in and a guest mode. Guest mode creates an isolated temporary account so the upload, demo score, video renderer, and orchestra flows work without configuring Google auth first.
 
+AI Coach uses the first configured OpenAI-compatible provider in this order: Groq, DeepSeek, OpenRouter, OpenAI, then Hugging Face Router. Set `AI_PROVIDER` to force one provider. The app only stores provider names and generated feedback, never API keys.
+
 ## Research-backed Santoor Model
 
 - Persian santur is modeled as a hammered dulcimer/struck zither with two rows of nine bridges, 18 courses, and 72 strings in four-string courses.
@@ -37,6 +39,15 @@ References used for the model and implementation direction: Britannica on santoo
    ```bash
    OMR_AUDIVERIS_PATH=tools/audiveris/Audiveris.app/Contents/MacOS/Audiveris
    ```
+   AI Coach works when one of these is set:
+   ```bash
+   GROQ_API_KEY=...
+   DEEPSEEK_API_KEY=...
+   OPENROUTER_API_KEY=...
+   OPENAI_API_KEY=...
+   HUGGINGFACE_API_KEY=...
+   ```
+   For Render, add the same secret variables in the web service's Environment tab. Local `.env` values are not uploaded to Render by Git.
 4. Run the API:
    ```bash
    uvicorn backend.app.main:app --reload --port 8000

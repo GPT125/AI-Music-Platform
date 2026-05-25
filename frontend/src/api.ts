@@ -1,4 +1,4 @@
-import type { ArrangementPayload, Instrument, Project, ScorePayload, TutorialVideoPlan, User } from "./types";
+import type { AIFeedback, AIStatus, ArrangementPayload, Instrument, Project, ScorePayload, TutorialVideoPlan, User } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
@@ -50,6 +50,9 @@ export const api = {
       body: JSON.stringify({ musicxml, status: "ready" }),
     }),
   instruments: () => request<{ instruments: Instrument[] }>("/api/instruments"),
+  aiStatus: () => request<AIStatus>("/api/ai/status"),
+  aiFeedback: (projectId: string) =>
+    request<{ feedback: AIFeedback; ai: AIStatus }>(`/api/projects/${projectId}/ai-feedback`, { method: "POST" }),
   arrange: (projectId: string, instruments: string[]) =>
     request<ArrangementPayload>(`/api/projects/${projectId}/arrangements`, {
       method: "POST",
@@ -58,6 +61,6 @@ export const api = {
   tutorialVideo: (projectId: string, arrangementId?: string) =>
     request<{ job_id: string; message: string; render_plan: TutorialVideoPlan }>(`/api/projects/${projectId}/tutorial-video`, {
       method: "POST",
-      body: JSON.stringify({ arrangement_id: arrangementId ?? null, fps: 30 }),
+      body: JSON.stringify({ arrangement_id: arrangementId ?? null, fps: 24 }),
     }),
 };

@@ -6,6 +6,7 @@ from backend.app.auth import COOKIE_NAME, create_token
 from backend.app.db import Base, SessionLocal, engine
 from backend.app.main import app
 from backend.app.models import User
+from backend.app.services.ai import ai_status, fallback_feedback, parse_json_content, safe_model
 from backend.app.services.omr import resolve_audiveris_path
 
 
@@ -57,6 +58,18 @@ def test_private_routes_require_authentication():
     client = TestClient(app)
     response = client.get("/api/projects")
     assert response.status_code == 401
+
+
+def test_ai_status_does_not_expose_keys():
+    status = ai_status()
+    assert "features" in status
+    assert "api_key" not in str(status).lower()
+
+
+def test_ai_helpers_sanitize_models_and_parse_fenced_json():
+    assert safe_model("deepseek", "sk-not-a-model") == "deepseek-chat"
+    parsed = parse_json_content('```json\n{"summary": "ok", "confidence": 0.9}\n```')
+    assert parsed["summary"] == "ok"
 
 
 def test_guest_login_creates_session():
@@ -153,7 +166,30 @@ def test_arrangement_requires_score_then_generates_tracks():
     assert payload["tracks"][0]["notes"]
 
 
-def test_tutorial_video_plan_uses_score_timeline_without_api_key():
+def test_ai_feedback_requires_score_then_returns_fallback(monkeypatch):
+    reset_db()
+    client = TestClient(app)
+    login(client)
+    project = client.post("/api/projects", json={"name": "AI coach"}).json()
+    empty_response = client.post(f"/api/projects/{project['id']}/ai-feedback")
+    assert empty_response.status_code == 400
+
+    async def fake_feedback(project_name, score_events):
+        return fallback_feedback(score_events)
+
+    monkeypatch.setattr("backend.app.api.generate_practice_feedback", fake_feedback)
+    client.post(
+        f"/api/projects/{project['id']}/assets",
+        files={"file": ("exercise.musicxml", SAMPLE_MUSICXML.encode("utf-8"), "application/vnd.recordare.musicxml+xml")},
+    )
+    response = client.post(f"/api/projects/{project['id']}/ai-feedback")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["feedback"]["practice_plan"]
+    assert payload["feedback"]["_provider"] == "deterministic"
+
+
+def test_tutorial_video_generates_playable_mp4_without_api_key():
     reset_db()
     client = TestClient(app)
     login(client)
@@ -164,13 +200,18 @@ def test_tutorial_video_plan_uses_score_timeline_without_api_key():
         f"/api/projects/{project['id']}/assets",
         files={"file": ("exercise.musicxml", SAMPLE_MUSICXML.encode("utf-8"), "application/vnd.recordare.musicxml+xml")},
     )
-    response = client.post(f"/api/projects/{project['id']}/tutorial-video", json={"fps": 30})
+    response = client.post(f"/api/projects/{project['id']}/tutorial-video", json={"fps": 12})
     assert response.status_code == 200
     plan = response.json()["render_plan"]
-    assert plan["renderer"] == "ffmpeg"
+    assert plan["status"] == "rendered"
+    assert plan["renderer"] == "local_ffmpeg_mp4"
     assert plan["requires_api_key"] is False
     assert plan["event_count"] == 3
     assert plan["cues"][1]["label"] == "E quarter-flat 4"
     assert len(plan["views"]) == 3
     assert plan["cues"][0]["mallet"] in {"left", "right"}
-    assert plan["ffmpeg_command"][0] == "ffmpeg"
+    assert plan["video_url"].startswith(f"/api/projects/{project['id']}/tutorial-video/")
+    video_response = client.get(plan["video_url"])
+    assert video_response.status_code == 200
+    assert video_response.headers["content-type"].startswith("video/mp4")
+    assert len(video_response.content) > 1000
